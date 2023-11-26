@@ -105,7 +105,8 @@ class CacheRegion(object):
             cacheStore = Cheetah.CacheStore.MemoryCacheStore()
         self._cacheStore = cacheStore
         self._wrappedCacheDataStore = _CacheDataStoreWrapper(
-            cacheStore, keyPrefix=templateCacheIdPrefix+':'+regionID+':')
+            cacheStore, keyPrefix=f'{templateCacheIdPrefix}:{regionID}:'
+        )
         self._cacheItems = {}
 
     def isNew(self):

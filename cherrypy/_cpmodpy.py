@@ -270,12 +270,12 @@ import re
 
 
 def read_process(cmd, args=""):
-    pipein, pipeout = os.popen4("%s %s" % (cmd, args))
+    pipein, pipeout = os.popen4(f"{cmd} {args}")
     try:
         firstline = pipeout.readline()
         if (re.search(r"(not recognized|No such file|not found)", firstline,
                       re.IGNORECASE)):
-            raise IOError('%s must be on your system path.' % cmd)
+            raise IOError(f'{cmd} must be on your system path.')
         output = firstline + pipeout.read()
     finally:
         pipeout.close()
@@ -315,15 +315,15 @@ LoadModule python_module modules/mod_python.so
                                      "opts": opts,
                                      "handler": self.handler,
                                      }
-        
+
         mpconf = os.path.join(os.path.dirname(__file__), "cpmodpy.conf")
         f = open(mpconf, 'wb')
         try:
             f.write(conf_data)
         finally:
             f.close()
-        
-        response = read_process(self.apache_path, "-k start -f %s" % mpconf)
+
+        response = read_process(self.apache_path, f"-k start -f {mpconf}")
         self.ready = True
         return response
     

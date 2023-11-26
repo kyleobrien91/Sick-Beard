@@ -19,10 +19,7 @@ class FieldError(HachoirError):
     pass
 
 def joinPath(path, name):
-    if path != "/":
-        return "/".join((path, name))
-    else:
-        return "/%s" % name
+    return "/".join((path, name)) if path != "/" else f"/{name}"
 
 class MissingField(KeyError, FieldError):
     def __init__(self, field, key):
@@ -68,7 +65,7 @@ class Field(Logger):
         @type description: str|None
         """
         assert issubclass(parent.__class__, Field)
-        assert (size is None) or (0 <= size)
+        assert size is None or size >= 0
         self._parent = parent
         self._name = name
         self._address = parent.nextFieldAddress()
@@ -156,9 +153,7 @@ class Field(Logger):
     doc="Field name (unique in its parent field set list)")
 
     def _getIndex(self):
-        if not self._parent:
-            return None
-        return self._parent.getFieldIndex(self)
+        return None if not self._parent else self._parent.getFieldIndex(self)
     index = property(_getIndex)
 
     def _getPath(self):
@@ -197,7 +192,7 @@ class Field(Logger):
         if name.strip("."):
             return None
         field = self
-        for index in xrange(1, len(name)):
+        for _ in xrange(1, len(name)):
             field = field._parent
             if field is None:
                 break
@@ -206,10 +201,7 @@ class Field(Logger):
     def getField(self, key, const=True):
         if key:
             if key[0] == "/":
-                if self._parent:
-                    current = self._parent.root
-                else:
-                    current = self
+                current = self._parent.root if self._parent else self
                 if len(key) == 1:
                     return current
                 key = key[1:]
@@ -236,10 +228,7 @@ class Field(Logger):
         assert self._parent
         return InputFieldStream(self, **args)
     def getSubIStream(self):
-        if hasattr(self, "_sub_istream"):
-            stream = self._sub_istream()
-        else:
-            stream = None
+        stream = self._sub_istream() if hasattr(self, "_sub_istream") else None
         if stream is None:
             stream = self._createInputStream()
             self._sub_istream = weakref_ref(stream)

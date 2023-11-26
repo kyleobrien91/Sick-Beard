@@ -37,14 +37,8 @@ class Hierarchy:
 
         self._contents = hierarchy
         self._currentURL = currentURL
-        if menuCSSClass:
-            self._menuCSSClass = ' class="%s"' % menuCSSClass
-        else:
-            self._menuCSSClass = ''
-        if crumbCSSClass:
-            self._crumbCSSClass = ' class="%s"' % crumbCSSClass
-        else:
-            self._crumbCSSClass = ''
+        self._menuCSSClass = f' class="{menuCSSClass}"' if menuCSSClass else ''
+        self._crumbCSSClass = f' class="{crumbCSSClass}"' if crumbCSSClass else ''
         self._prefix=prefix
 
     
@@ -53,8 +47,8 @@ class Hierarchy:
     def menuList(self, menuCSSClass=None):
         """An indented menu list"""
         if menuCSSClass:
-            self._menuCSSClass = ' class="%s"' % menuCSSClass
-        
+            self._menuCSSClass = f' class="{menuCSSClass}"'
+
         stream = StringIO()
         for item in self._contents[1:]:
             self._menubarRecurse(item, 0, stream)
@@ -63,8 +57,8 @@ class Hierarchy:
     def crumbs(self, crumbCSSClass=None):
         """The home>where>you>are crumbs"""
         if crumbCSSClass:
-            self._crumbCSSClass = ' class="%s"' % crumbCSSClass
-        
+            self._crumbCSSClass = f' class="{crumbCSSClass}"'
+
         path = []
         pos = self._contents
         while True:
@@ -76,18 +70,17 @@ class Hierarchy:
                 if self._inContents(item):
                     if isinstance(item, tuple):
                         path.append(item)
-                        break
                     else:
                         pos = item
                         foundAny = True
-                        break
+                    break
             if not foundAny:
                 break
         if len(path) == 1:
             return self.emptyCrumb()
         return string.join(map(lambda x, self=self: self.crumbLink(x[0], x[1]),
                                path), self.crumbSeperator()) + \
-                               self.crumbTerminator()
+                                   self.crumbTerminator()
 
     ## Methods to control the Aesthetics
     #  - override these methods for your own look
@@ -103,10 +96,9 @@ class Hierarchy:
         
     def crumbLink(self, url, text):
         if url == self._currentURL or self._prefix + url == self._currentURL:
-            return '<B%s>%s</B>' % (text, self._crumbCSSClass)
+            return f'<B{text}>{self._crumbCSSClass}</B>'
         else:
-            return '<A HREF="%s%s"%s>%s</A>' % \
-                   (self._prefix, url, self._crumbCSSClass, text)
+            return f'<A HREF="{self._prefix}{url}"{self._crumbCSSClass}>{text}</A>'
         
     def crumbSeperator(self):
         return '&nbsp;&gt;&nbsp;'
@@ -135,10 +127,7 @@ class Hierarchy:
     def _inContents(self, contents):
         if isinstance(contents, tuple):
             return self._currentURL == contents[0]
-        for item in contents:
-            if self._inContents(item):
-                return True
-        return False
+        return any(self._inContents(item) for item in contents)
 ##################################################
 ## from the command line
 

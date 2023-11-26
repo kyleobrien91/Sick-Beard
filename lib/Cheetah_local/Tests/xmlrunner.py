@@ -166,11 +166,9 @@ class XMLTestRunner(object):
     def run(self, test):
         """Run the given test case or test suite."""
         class_ = test.__class__
-        classname = class_.__module__ + "." + class_.__name__
-        if self._stream == None:
-            filename = "TEST-%s.xml" % classname
-            if self._filename:
-                filename = self._filename
+        classname = f"{class_.__module__}.{class_.__name__}"
+        if self._stream is None:
+            filename = self._filename if self._filename else f"TEST-{classname}.xml"
             stream = file(os.path.join(self._path, filename), "w")
             stream.write('<?xml version="1.0" encoding="utf-8"?>\n')
         else:
@@ -201,7 +199,7 @@ class XMLTestRunner(object):
 
         time_taken = time.time() - start_time
         result.print_report(stream, time_taken, out_s, err_s)
-        if self._stream == None:
+        if self._stream is None:
             stream.close()
 
         return result

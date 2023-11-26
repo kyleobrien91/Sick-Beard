@@ -100,7 +100,7 @@ def calculateNonce (realm, algorithm=MD5):
 
     return encoder ("%d:%s" % (time.time(), realm))
 
-def digestAuth (realm, algorithm=MD5, nonce=None, qop=AUTH):
+def digestAuth(realm, algorithm=MD5, nonce=None, qop=AUTH):
     """Challenges the client for a Digest authentication."""
     global SUPPORTED_ALGORITHM, DIGEST_AUTH_ENCODERS, SUPPORTED_QOP
     assert algorithm in SUPPORTED_ALGORITHM
@@ -109,30 +109,28 @@ def digestAuth (realm, algorithm=MD5, nonce=None, qop=AUTH):
     if nonce is None:
         nonce = calculateNonce (realm, algorithm)
 
-    return 'Digest realm="%s", nonce="%s", algorithm="%s", qop="%s"' % (
-        realm, nonce, algorithm, qop
-    )
+    return f'Digest realm="{realm}", nonce="{nonce}", algorithm="{algorithm}", qop="{qop}"'
 
-def basicAuth (realm):
+def basicAuth(realm):
     """Challengenes the client for a Basic authentication."""
     assert '"' not in realm, "Realms cannot contain the \" (quote) character."
 
-    return 'Basic realm="%s"' % realm
+    return f'Basic realm="{realm}"'
 
-def doAuth (realm):
+def doAuth(realm):
     """'doAuth' function returns the challenge string b giving priority over
     Digest and fallback to Basic authentication when the browser doesn't
     support the first one.
     
     This should be set in the HTTP header under the key 'WWW-Authenticate'."""
 
-    return digestAuth (realm) + " " + basicAuth (realm)
+    return f"{digestAuth(realm)} {basicAuth(realm)}"
 
 
 ################################################################################
 # Parse authorization parameters
 #
-def _parseDigestAuthorization (auth_params):
+def _parseDigestAuthorization(auth_params):
     # Convert the auth params to a dict
     items = parse_http_list(auth_params)
     params = parse_keqv_list(items)
@@ -146,8 +144,7 @@ def _parseDigestAuthorization (auth_params):
             return None
 
     # If qop is sent then cnonce and nc MUST be present
-    if "qop" in params and not ("cnonce" in params \
-                                      and "nc" in params):
+    if "qop" in params and ("cnonce" not in params or "nc" not in params):
         return None
 
     # If qop is not sent, neither cnonce nor nc can be present
@@ -191,7 +188,7 @@ def parseAuthorization (credentials):
 ################################################################################
 # Check provided response for a valid password
 #
-def md5SessionKey (params, password):
+def md5SessionKey(params, password):
     """
     If the "algorithm" directive's value is "MD5-sess", then A1 
     [the session key] is calculated only once - on the first request by the
@@ -211,10 +208,7 @@ def md5SessionKey (params, password):
 """
 
     keys = ("username", "realm", "nonce", "cnonce")
-    params_copy = {}
-    for key in keys:
-        params_copy[key] = params[key]
-
+    params_copy = {key: params[key] for key in keys}
     params_copy["algorithm"] = MD5_SESS
     return _A1 (params_copy, password)
 
@@ -226,15 +220,15 @@ def _A1(params, password):
         # If the "algorithm" directive's value is "MD5" or is
         # unspecified, then A1 is:
         # A1 = unq(username-value) ":" unq(realm-value) ":" passwd
-        return "%s:%s:%s" % (params["username"], params["realm"], password)
+        return f'{params["username"]}:{params["realm"]}:{password}'
 
     elif algorithm == MD5_SESS:
 
         # This is A1 if qop is set
         # A1 = H( unq(username-value) ":" unq(realm-value) ":" passwd )
         #         ":" unq(nonce-value) ":" unq(cnonce-value)
-        h_a1 = H ("%s:%s:%s" % (params["username"], params["realm"], password))
-        return "%s:%s:%s" % (h_a1, params["nonce"], params["cnonce"])
+        h_a1 = H(f'{params["username"]}:{params["realm"]}:{password}')
+        return f'{h_a1}:{params["nonce"]}:{params["cnonce"]}'
 
 
 def _A2(params, method, kwargs):
@@ -243,21 +237,17 @@ def _A2(params, method, kwargs):
 
     qop = params.get ("qop", "auth")
     if qop == "auth":
-        return method + ":" + params["uri"]
+        return f"{method}:" + params["uri"]
     elif qop == "auth-int":
         # If the "qop" value is "auth-int", then A2 is:
         # A2 = Method ":" digest-uri-value ":" H(entity-body)
         entity_body = kwargs.get ("entity_body", "")
         H = kwargs["H"]
 
-        return "%s:%s:%s" % (
-            method,
-            params["uri"],
-            H(entity_body)
-        )
+        return f'{method}:{params["uri"]}:{H(entity_body)}'
 
     else:
-        raise NotImplementedError ("The 'qop' method is unknown: %s" % qop)
+        raise NotImplementedError(f"The 'qop' method is unknown: {qop}")
 
 def _computeDigestResponse(auth_map, password, method="GET", A1=None, **kwargs):
     """
@@ -268,7 +258,7 @@ def _computeDigestResponse(auth_map, password, method="GET", A1=None, **kwargs):
     algorithm = params.get ("algorithm", MD5)
 
     H = DIGEST_AUTH_ENCODERS[algorithm]
-    KD = lambda secret, data: H(secret + ":" + data)
+    KD = lambda secret, data: H(f"{secret}:{data}")
 
     qop = params.get ("qop", None)
 
@@ -287,19 +277,13 @@ def _computeDigestResponse(auth_map, password, method="GET", A1=None, **kwargs):
         #                              ":" unq(qop-value)
         #                              ":" H(A2)
         #                      ) <">
-        request = "%s:%s:%s:%s:%s" % (
-            params["nonce"],
-            params["nc"],
-            params["cnonce"],
-            params["qop"],
-            H_A2,
-        )
+        request = f'{params["nonce"]}:{params["nc"]}:{params["cnonce"]}:{params["qop"]}:{H_A2}'
     elif qop is None:
         # If the "qop" directive is not present (this construction is
         # for compatibility with RFC 2069):
         # request-digest  =
         #         <"> < KD ( H(A1), unq(nonce-value) ":" H(A2) ) > <">
-        request = "%s:%s" % (params["nonce"], H_A2)
+        request = f'{params["nonce"]}:{H_A2}'
 
     return KD(H_A1, request)
 

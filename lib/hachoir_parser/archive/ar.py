@@ -14,11 +14,11 @@ class ArchiveFileEntry(FieldSet):
         if len(info) != 7:
             raise ParserError("Invalid file entry header")
         size = int(info[5])
-        if 0 < size:
+        if size > 0:
             yield RawBytes(self, "content", size, "File data")
 
     def createDescription(self):
-        return "File entry (%s)" % self["header"].value.split()[0]
+        return f'File entry ({self["header"].value.split()[0]})'
 
 class ArchiveFile(Parser):
     endian = BIG_ENDIAN

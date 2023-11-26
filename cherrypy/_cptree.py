@@ -191,31 +191,31 @@ class Tree(object):
                 "order to inpect the WSGI environ for SCRIPT_NAME upon each "
                 "request). You cannot mount such Applications on this Tree; "
                 "you must pass them to a WSGI server interface directly.")
-        
+
         # Next line both 1) strips trailing slash and 2) maps "/" -> "".
         script_name = script_name.rstrip("/")
-        
+
         if isinstance(root, Application):
             app = root
-            if script_name != "" and script_name != app.script_name:
+            if script_name not in ["", app.script_name]:
                 raise ValueError("Cannot specify a different script name and "
                                  "pass an Application instance to cherrypy.mount")
             script_name = app.script_name
         else:
             app = Application(root, script_name)
-            
+
             # If mounted at "", add favicon.ico
             if (script_name == "" and root is not None
                     and not hasattr(root, "favicon_ico")):
                 favicon = os.path.join(os.getcwd(), os.path.dirname(__file__),
                                        "favicon.ico")
                 root.favicon_ico = tools.staticfile.handler(favicon)
-        
+
         if config:
             app.merge(config)
-        
+
         self.apps[script_name] = app
-        
+
         return app
     
     def graft(self, wsgi_callable, script_name=""):

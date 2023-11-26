@@ -93,13 +93,13 @@ class SignalHandler(object):
     def unsubscribe(self):
         for signum, handler in self._previous_handlers.items():
             signame = self.signals[signum]
-            
+
             if handler is None:
-                self.bus.log("Restoring %s handler to SIG_DFL." % signame)
+                self.bus.log(f"Restoring {signame} handler to SIG_DFL.")
                 handler = _signal.SIG_DFL
             else:
                 self.bus.log("Restoring %s handler %r." % (signame, handler))
-            
+
             try:
                 our_handler = _signal.signal(signum, handler)
                 if our_handler is None:
@@ -130,18 +130,18 @@ class SignalHandler(object):
             except KeyError:
                 raise ValueError("No such signal: %r" % signal)
             signum = signal
-        
+
         prev = _signal.signal(signum, self._handle_signal)
         self._previous_handlers[signum] = prev
-        
+
         if listener is not None:
-            self.bus.log("Listening for %s." % signame)
+            self.bus.log(f"Listening for {signame}.")
             self.bus.subscribe(signame, listener)
     
     def _handle_signal(self, signum=None, frame=None):
         """Python signal handler (self.set_handler subscribes it for you)."""
         signame = self.signals[signum]
-        self.bus.log("Caught signal %s." % signame)
+        self.bus.log(f"Caught signal {signame}.")
         self.bus.publish(signame)
     
     def handle_SIGHUP(self):
@@ -222,9 +222,9 @@ class DropPrivileges(SimplePlugin):
             if grp:
                 group = grp.getgrgid(os.getgid())[0]
             return name, group
-        
+
         if self.finalized:
-            if not (self.uid is None and self.gid is None):
+            if self.uid is not None or self.gid is not None:
                 self.bus.log('Already running as uid: %r gid: %r' % 
                              current_ids())
         else:
@@ -238,7 +238,7 @@ class DropPrivileges(SimplePlugin):
                 if self.uid is not None:
                     os.setuid(self.uid)
                 self.bus.log('Running as uid: %r gid: %r' % current_ids())
-        
+
         # umask
         if self.finalized:
             if self.umask is not None:
@@ -250,7 +250,7 @@ class DropPrivileges(SimplePlugin):
                 old_umask = os.umask(self.umask)
                 self.bus.log('umask old: %03o, new: %03o' % 
                              (old_umask, self.umask))
-        
+
         self.finalized = True
     # This is slightly higher than the priority for server.start
     # in order to facilitate the most common use: starting on a low
@@ -430,7 +430,7 @@ class Monitor(SimplePlugin):
     def stop(self):
         """Stop our callback's perpetual timer thread."""
         if self.thread is None:
-            self.bus.log("No thread running for %s." % self.name or self.__class__.__name__)
+            self.bus.log(f"No thread running for {self.name}." or self.__class__.__name__)
         else:
             if self.thread is not threading.currentThread():
                 name = self.thread.getName()
@@ -485,29 +485,28 @@ class Autoreloader(Monitor):
             if filename:
                 if filename.endswith('.pyc'):
                     filename = filename[:-1]
-                
+
                 oldtime = self.mtimes.get(filename, 0)
                 if oldtime is None:
                     # Module with no .py file. Skip it.
                     continue
-                
+
                 try:
                     mtime = os.stat(filename).st_mtime
                 except OSError:
                     # Either a module with no .py file, or it's been deleted.
                     mtime = None
-                
+
                 if filename not in self.mtimes:
                     # If a module has no .py file, this will be None.
                     self.mtimes[filename] = mtime
-                else:
-                    if mtime is None or mtime > oldtime:
+                elif mtime is None or mtime > oldtime:
                         # The file has been deleted or modified.
-                        self.bus.log("Restarting because %s changed." % filename)
-                        self.thread.cancel()
-                        self.bus.log("Stopped thread %r." % self.thread.getName())
-                        self.bus.restart()
-                        return
+                    self.bus.log(f"Restarting because {filename} changed.")
+                    self.thread.cancel()
+                    self.bus.log("Stopped thread %r." % self.thread.getName())
+                    self.bus.restart()
+                    return
 
 
 class ThreadManager(SimplePlugin):

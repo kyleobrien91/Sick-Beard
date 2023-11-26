@@ -21,5 +21,5 @@ def humanPixelSize(value):
     return ngettext("%s pixel", "%s pixels", value) % value
 
 def humanDPI(value):
-    return u"%s DPI" % value
+    return f"{value} DPI"
 

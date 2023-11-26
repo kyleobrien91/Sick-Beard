@@ -32,13 +32,12 @@ class BmpMetadata(RootMetadata):
         hdr = image["header"]
         self.width = hdr["width"].value
         self.height = hdr["height"].value
-        bpp = hdr["bpp"].value
-        if bpp:
+        if bpp := hdr["bpp"].value:
             if bpp <= 8 and "used_colors" in hdr:
                 self.nb_colors = hdr["used_colors"].value
             self.bits_per_pixel = bpp
         self.compression = hdr["compression"].display
-        self.format_version = u"Microsoft Bitmap version %s" % hdr.getFormatVersion()
+        self.format_version = f"Microsoft Bitmap version {hdr.getFormatVersion()}"
 
         self.width_dpi = hdr["horizontal_dpi"].value
         self.height_dpi = hdr["vertical_dpi"].value
@@ -119,7 +118,7 @@ class PcxMetadata(RootMetadata):
         if 1 <= pcx["bpp"].value <= 8:
             self.nb_colors = 2 ** pcx["bpp"].value
         self.compression = _("Run-length encoding (RLE)")
-        self.format_version = "PCX: %s" % pcx["version"].display
+        self.format_version = f'PCX: {pcx["version"].display}'
         if "image_data" in pcx:
             computeComprRate(self, pcx["image_data"].size)
 
@@ -177,10 +176,7 @@ class PngMetadata(RootMetadata):
                 key = self.TEXT_TO_ATTR[keyword.lower()]
                 setattr(self, key, text)
             except KeyError:
-                if keyword.lower() != "comment":
-                    self.comment = "%s=%s" % (keyword, text)
-                else:
-                    self.comment = text
+                self.comment = f"{keyword}={text}" if keyword.lower() != "comment" else text
         compr_size = sum( data.size for data in png.array("data") )
         computeComprRate(self, compr_size)
 
@@ -204,10 +200,7 @@ class PngMetadata(RootMetadata):
         else:
             nb_colors = None
         if not header["has_palette"].value:
-            if header["has_alpha"].value:
-                self.pixel_format = _("RGBA")
-            else:
-                self.pixel_format = _("RGB")
+            self.pixel_format = _("RGBA") if header["has_alpha"].value else _("RGB")
         elif "/transparency" in header:
             self.pixel_format = _("Color index with transparency")
             if nb_colors:
@@ -227,9 +220,9 @@ class GifMetadata(RootMetadata):
         if self.has("bits_per_pixel"):
             self.nb_colors = (1 << self.get('bits_per_pixel'))
         self.compression = _("LZW")
-        self.format_version =  "GIF version %s" % gif["version"].value
+        self.format_version = f'GIF version {gif["version"].value}'
         for comments in gif.array("comments"):
-            for comment in gif.array(comments.name + "/comment"):
+            for comment in gif.array(f"{comments.name}/comment"):
                 self.comment = comment.value
         if "graphic_ctl/has_transp" in gif and gif["graphic_ctl/has_transp"].value:
             self.pixel_format = _("Color index with transparency")

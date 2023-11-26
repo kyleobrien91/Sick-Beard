@@ -40,17 +40,13 @@ class Unsigned(RawInt):
     def createValue(self):
         header = 1 << self._size / 8 * 7
         value = RawInt.createValue(self) - header
-        if value + 1 == header:
-            return None
-        return value
+        return None if value + 1 == header else value
 
 class Signed(Unsigned):
     def createValue(self):
         header = 1 << self._size / 8 * 7 - 1
         value = RawInt.createValue(self) - 3 * header + 1
-        if value == header:
-            return None
-        return value
+        return None if value == header else value
 
 def Enum(parent, enum):
     return _Enum(GenericInteger(parent, 'enum', False, parent['size'].value*8), enum)
@@ -85,9 +81,8 @@ class AttachedFile(Bytes):
                 self._filename = None
         return self._filename
     def createDescription(self):
-        filename = self._getFilename()
-        if filename:
-            return 'File "%s"' % filename
+        if filename := self._getFilename():
+            return f'File "{filename}"'
         return "('Filename' entry not found)"
     def _createInputStream(self, **args):
         tags = args.setdefault("tags",[])
@@ -95,8 +90,7 @@ class AttachedFile(Bytes):
             tags.append(("mime", self["../../FileMimeType/string"].value))
         except MissingField:
             pass
-        filename = self._getFilename()
-        if filename:
+        if filename := self._getFilename():
             tags.append(("filename", filename))
         return Bytes._createInputStream(self, **args)
 
@@ -166,27 +160,27 @@ class Lace(FieldSet):
         FieldSet.__init__(self, parent, 'Lace', size=size * 8)
 
     def parseXiph(self):
-        for i in xrange(self.n_frames):
+        for _ in xrange(self.n_frames):
             yield XiphInt(self, 'size[]')
         for i in xrange(self.n_frames):
-            yield RawBytes(self, 'frame[]', self['size['+str(i)+']'].value)
+            yield RawBytes(self, 'frame[]', self[f'size[{str(i)}]'].value)
         yield RawBytes(self,'frame[]', (self._size - self.current_size) / 8)
 
     def parseEBML(self):
         yield Unsigned(self, 'size')
-        for i in xrange(1, self.n_frames):
+        for _ in xrange(1, self.n_frames):
             yield Signed(self, 'dsize[]')
         size = self['size'].value
         yield RawBytes(self, 'frame[]', size)
         for i in xrange(self.n_frames-1):
-            size += self['dsize['+str(i)+']'].value
+            size += self[f'dsize[{str(i)}]'].value
             yield RawBytes(self, 'frame[]', size)
         yield RawBytes(self,'frame[]', (self._size - self.current_size) / 8)
 
     def parseFixed(self):
         n = self.n_frames + 1
         size = self._size / 8 / n
-        for i in xrange(n):
+        for _ in xrange(n):
             yield RawBytes(self, 'frame[]', size)
 
 class Block(FieldSet):
@@ -217,8 +211,7 @@ class Block(FieldSet):
             return
 
         size = (self._size - self.current_size) / 8
-        lacing = self['lacing'].value
-        if lacing:
+        if lacing := self['lacing'].value:
             yield textHandler(GenericInteger(self, 'n_frames', False, 8),
                 lambda chunk: str(chunk.value+1))
             yield Lace(self, lacing - 1, size - 1)
@@ -574,9 +567,7 @@ class MkvFile(Parser):
         return True
 
     def createFields(self):
-        hdr = EBML(self, ebml)
-        yield hdr
-
+        yield EBML(self, ebml)
         while not self.eof:
             yield EBML(self, { 0x18538067: ('Segment[]', segment) })
 
@@ -585,14 +576,8 @@ class MkvFile(Parser):
         return field.absolute_address + field.value * 8 + field.size
 
     def createDescription(self):
-        if self._getDoctype() == 'webm':
-            return 'WebM video'
-        else:
-            return 'Matroska video'
+        return 'WebM video' if self._getDoctype() == 'webm' else 'Matroska video'
 
     def createMimeType(self):
-        if self._getDoctype() == 'webm':
-            return u"video/webm"
-        else:
-            return u"video/x-matroska"
+        return u"video/webm" if self._getDoctype() == 'webm' else u"video/x-matroska"
 

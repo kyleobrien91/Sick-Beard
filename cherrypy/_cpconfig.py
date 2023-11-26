@@ -241,9 +241,9 @@ def _engine_namespace_handler(k, v):
     elif k == 'deadlock_poll_freq':
         engine.timeout_monitor.frequency = v
     elif k == 'SIGHUP':
-        engine.listeners['SIGHUP'] = set([v])
+        engine.listeners['SIGHUP'] = {v}
     elif k == 'SIGTERM':
-        engine.listeners['SIGTERM'] = set([v])
+        engine.listeners['SIGTERM'] = {v}
     elif "." in k:
         plugin, attrname = k.split(".", 1)
         plugin = getattr(engine, plugin)
@@ -263,7 +263,7 @@ Config.namespaces["engine"] = _engine_namespace_handler
 def _tree_namespace_handler(k, v):
     """Namespace handler for the 'tree' config namespace."""
     cherrypy.tree.graft(v, v.script_name)
-    cherrypy.engine.log("Mounted: %s on %s" % (v, v.script_name or "/"))
+    cherrypy.engine.log(f'Mounted: {v} on {v.script_name or "/"}')
 Config.namespaces["tree"] = _tree_namespace_handler
 
 

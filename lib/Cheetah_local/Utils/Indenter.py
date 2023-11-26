@@ -41,8 +41,7 @@ class IndentProcessor(object):
         result = []
 
         for line in _txt.splitlines():
-            match = self.INDENT_DIR.match(line)
-            if match:
+            if match := self.INDENT_DIR.match(line):
                 #is indention directive
                 args = match.group(self.ARGS).strip()
                 if args == self.ON:
@@ -66,9 +65,7 @@ class IndentProcessor(object):
             else:
                 match = self.DIRECTIVE.match(line)
                 if not match:
-                    #is not another directive
-                    match = self.WHITESPACES.match(line)
-                    if match:
+                    if match := self.WHITESPACES.match(line):
                         size = len(match.group("ws").expandtabs(4))
                         line = ("${self._CHEETAH__indenter.indent(%(size)d)}" % {"size":size}) + line.lstrip()
                     else:
@@ -103,21 +100,13 @@ class Indenter(object):
     def pop(self):
         """the levestack can not become -1. any attempt to do so
            sets the level to 0!"""
-        if len(self.LevelStack) > 0:
-            self.Level = self.LevelStack.pop()
-        else:
-            self.Level = 0
+        self.Level = self.LevelStack.pop() if len(self.LevelStack) > 0 else 0
     def setLevel(self, _level):
         """the leve can't be less than zero. any attempt to do so
            sets the level automatically to zero!"""
-        if _level < 0:
-            self.Level = 0
-        else:
-            self.Level = _level
+        self.Level = max(_level, 0)
     def setChar(self, _chars):
         self.Chars = _chars
     def indent(self, _default=0):
-        if self.On:
-            return self.Chars * self.Level
-        return " " * _default
+        return self.Chars * self.Level if self.On else " " * _default
 

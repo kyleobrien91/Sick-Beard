@@ -61,12 +61,12 @@ class MultipartPostHandler(urllib2.BaseHandler):
             boundary = mimetools.choose_boundary()
         if buffer is None:
             buffer = ''
-        for(key, value) in vars:
+        for (key, value) in vars:
             buffer += '--%s\r\n' % boundary
-            buffer += 'Content-Disposition: form-data; name="%s"' % key
+            buffer += f'Content-Disposition: form-data; name="{key}"'
             buffer += '\r\n\r\n' + value + '\r\n'
         for(key, fd) in files:
-            
+
             # allow them to pass in a file or a tuple with name & data
             if type(fd) == file:
                 name_in = fd.name
@@ -74,7 +74,7 @@ class MultipartPostHandler(urllib2.BaseHandler):
                 data_in = fd.read()
             elif type(fd) in (tuple, list):
                 name_in, data_in = fd
-                
+
             filename = os.path.basename(name_in)
             contenttype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
             buffer += '--%s\r\n' % boundary

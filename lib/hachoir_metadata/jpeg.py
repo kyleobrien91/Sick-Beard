@@ -88,7 +88,7 @@ class JpegMetadata(RootMetadata):
     def startOfFrame(self, sof):
         # Set compression method
         key = sof["../type"].value
-        self.compression = "JPEG (%s)" % JpegChunk.START_OF_FRAME[key]
+        self.compression = f"JPEG ({JpegChunk.START_OF_FRAME[key]})"
 
         # Read image size and bits/pixel
         self.width = sof["width"].value
@@ -109,9 +109,7 @@ class JpegMetadata(RootMetadata):
         # Read quantization tables
         qtlist = []
         for dqt in jpeg.array("quantization"):
-            for qt in dqt.array("content/qt"):
-                # TODO: Take care of qt["index"].value?
-                qtlist.append(qt)
+            qtlist.extend(iter(dqt.array("content/qt")))
         if not qtlist:
             return
 
@@ -125,7 +123,7 @@ class JpegMetadata(RootMetadata):
         # Choose the right quality table and compute hash value
         try:
             hashval= qtlist[0]["coeff[2]"].value +  qtlist[0]["coeff[53]"].value
-            if 2 <= len(qtlist):
+            if len(qtlist) >= 2:
                 hashval += qtlist[1]["coeff[0]"].value + qtlist[1]["coeff[63]"].value
                 hashtable = QUALITY_HASH_COLOR
                 sumtable = QUALITY_SUM_COLOR
@@ -142,7 +140,7 @@ class JpegMetadata(RootMetadata):
                 quality = "%s%%" % (index + 1)
                 if (hashval > hashtable[index]) or (sumcoeff > sumtable[index]):
                     quality += " " + _("(approximate)")
-                self.comment = "JPEG quality: %s" % quality
+                self.comment = f"JPEG quality: {quality}"
                 return
 
     @fault_tolerant
@@ -169,7 +167,7 @@ class JpegMetadata(RootMetadata):
         if "value" in entry:
             value = entry["value"].value
         else:
-            value = ifd["value_%s" % entry.name].value
+            value = ifd[f"value_{entry.name}"].value
 
         # Convert value to string
         if tag == ExifEntry.TAG_ORIENTATION:
@@ -199,28 +197,19 @@ class JpegMetadata(RootMetadata):
         for entry in ifd.array("entry"):
             tag = entry["tag"].value
             if tag == ExifEntry.TAG_GPS_LATITUDE_REF:
-                if entry["value"].value == "N":
-                    latitude_ref = 1
-                else:
-                    latitude_ref = -1
+                latitude_ref = 1 if entry["value"].value == "N" else -1
             elif tag == ExifEntry.TAG_GPS_LONGITUDE_REF:
-                if entry["value"].value == "E":
-                    longitude_ref = 1
-                else:
-                    longitude_ref = -1
+                longitude_ref = 1 if entry["value"].value == "E" else -1
             elif tag == ExifEntry.TAG_GPS_ALTITUDE_REF:
-                if entry["value"].value == 1:
-                    altitude_ref = -1
-                else:
-                    altitude_ref = 1
+                altitude_ref = -1 if entry["value"].value == 1 else 1
             elif tag == ExifEntry.TAG_GPS_LATITUDE:
                 latitude = [ifd["value_%s[%u]" % (entry.name, index)].value for index in xrange(3)]
             elif tag == ExifEntry.TAG_GPS_LONGITUDE:
                 longitude = [ifd["value_%s[%u]" % (entry.name, index)].value for index in xrange(3)]
             elif tag == ExifEntry.TAG_GPS_ALTITUDE:
-                altitude = ifd["value_%s" % entry.name].value
+                altitude = ifd[f"value_{entry.name}"].value
             elif tag == ExifEntry.TAG_GPS_DATESTAMP:
-                datestamp = ifd["value_%s" % entry.name].value
+                datestamp = ifd[f"value_{entry.name}"].value
             elif tag == ExifEntry.TAG_GPS_TIMESTAMP:
                 items = [ifd["value_%s[%u]" % (entry.name, index)].value for index in xrange(3)]
                 items = map(int, items)
@@ -243,7 +232,7 @@ class JpegMetadata(RootMetadata):
             self.altitude = value
         if datestamp:
             if timestamp:
-                datestamp += " " + timestamp
+                datestamp += f" {timestamp}"
             self.creation_date = datestamp
 
     def parseIPTC(self, iptc):
@@ -269,16 +258,15 @@ class JpegMetadata(RootMetadata):
                 continue
             if tag not in self.IPTC_KEY:
                 if tag != 0:
-                    self.warning("Skip IPTC key %s: %s" % (
-                        field["tag"].display, makeUnicode(value)))
+                    self.warning(f'Skip IPTC key {field["tag"].display}: {makeUnicode(value)}')
                 continue
             setattr(self, self.IPTC_KEY[tag], value)
         if datestr and hourstr:
             try:
-                year = int(datestr[0:4])
+                year = int(datestr[:4])
                 month = int(datestr[4:6])
                 day = int(datestr[6:8])
-                hour = int(hourstr[0:2])
+                hour = int(hourstr[:2])
                 min = int(hourstr[2:4])
                 sec = int(hourstr[4:6])
                 self.creation_date = datetime(year, month, day, hour, min, sec)

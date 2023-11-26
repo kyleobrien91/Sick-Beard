@@ -12,7 +12,7 @@ class GenericInteger(Bits):
     """
     def __init__(self, parent, name, signed, size, description=None):
         if not (8 <= size <= 256):
-            raise FieldError("Invalid integer size (%s): have to be in 8..256" % size)
+            raise FieldError(f"Invalid integer size ({size}): have to be in 8..256")
         Bits.__init__(self, parent, name, size, description)
         self.signed = signed
 

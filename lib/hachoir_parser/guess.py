@@ -39,10 +39,7 @@ class QueryParser(object):
     def translate(self, name, value):
         if name == "filename":
             filename = os.path.basename(value).split(".")
-            if len(filename) <= 1:
-                value = ""
-            else:
-                value = filename[-1].lower()
+            value = "" if len(filename) <= 1 else filename[-1].lower()
             name = "file_ext"
         return name, value
 
@@ -66,10 +63,7 @@ class QueryParser(object):
             if tag is not None:
                 key = tag[0]
                 byname = self.db.bytag.get(key,{})
-                if tag[1] is None:
-                    values = byname.itervalues()
-                else:
-                    values = byname.get(tag[1],()),
+                values = byname.itervalues() if tag[1] is None else (byname.get(tag[1],()), )
                 if key == "id" and values:
                     self.validate = False
                 for value in values:

@@ -124,7 +124,7 @@ class Date(FieldSet):
             date += [ self["hour"].value, self["min"].value, cs / 100, cs % 100 * 10000 ]
         else:
             mkdate = datetime.date
-        if date == [ 0 for i in date ]:
+        if date == [0 for _ in date]:
             date = None
         else:
             date[0] += 1980
@@ -148,13 +148,12 @@ class InodeLink(Link):
         return self.target
 
     def createValue(self):
-        field = InodeGen(self["/"], self.parent, self._getTargetPath())(self)
-        if field:
+        if field := InodeGen(self["/"], self.parent, self._getTargetPath())(self):
             self._display = field.path
             return Link.createValue(self)
 
     def createDisplay(self):
-        return "/%s[0]" % self._getTargetPath()
+        return f"/{self._getTargetPath()}[0]"
 
 
 class FileEntry(FieldSet):
@@ -178,9 +177,8 @@ class FileEntry(FieldSet):
         name = self["name"].value
         if isinstance(name, str):
             name = makePrintable(name, "ASCII", to_unicode=True)
-        ext = self["ext"].value
-        if ext:
-            name += "." + ext
+        if ext := self["ext"].value:
+            name += f".{ext}"
         if name[0] == 5:
             name = "\xE5" + name[1:]
         if not self.LFN and self["directory"].value:
@@ -201,7 +199,7 @@ class FileEntry(FieldSet):
             seq_no = self["seq_no"].value
             return "Long filename part: '%s' [%u]" % (name, seq_no)
         else:
-            return "File: '%s'" % self.getFilename()
+            return f"File: '{self.getFilename()}'"
 
     def getCluster(self):
         cluster = self["cluster_lo"].value
@@ -268,8 +266,7 @@ class File(Fragment):
         return self["data"]
     def createFields(self):
         yield Bytes(self, "data", self.datasize/8)
-        padding = self._size - self.current_size
-        if padding:
+        if padding := self._size - self.current_size:
             yield createPaddingField(self, padding)
 
 class InodeGen:
@@ -286,15 +283,15 @@ class InodeGen:
         self.createInputStream = createInputStream
 
     def __call__(self, prev):
-        name = self.path + "[]"
+        name = f"{self.path}[]"
         address, size, last = self.cluster.next()
         if self.filesize:
             if self.done >= self.filesize:
-                error("(FAT) bad metadata for " + self.path)
+                error(f"(FAT) bad metadata for {self.path}")
                 return
             field = File(self.root, name, size=size)
             if prev.first is None:
-                field._description = 'File size: %s' % humanFilesize(self.filesize//8)
+                field._description = f'File size: {humanFilesize(self.filesize // 8)}'
                 field.setSubIStream(self.createInputStream)
             field.datasize = min(self.filesize - self.done, size)
             self.done += field.datasize
@@ -304,10 +301,7 @@ class InodeGen:
         if not isinstance(padding, (PaddingBytes, RawBytes)):
             error("(FAT) address %u doesn't point to a padding field" % address)
             return
-        if last:
-            next = None
-        else:
-            next = lambda: self(field)
+        next = None if last else (lambda: self(field))
         field.setLinks(prev.first, next)
         self.root.writeFieldsIn(padding, address, (field,))
         return field
@@ -358,12 +352,12 @@ class FAT_FS(Parser):
                 (boot["boot_copy"].value, lambda: Boot(self, "bkboot", "Copy of the boot sector")),
             )):
                 if field[0]:
-                    padding = self.seekByte(field[0] * self.sector_size)
-                    if padding:
+                    if padding := self.seekByte(field[0] * self.sector_size):
                         yield padding
                     yield field[1]()
-        padding = self.seekByte(boot["reserved_sectors"].value * self.sector_size)
-        if padding:
+        if padding := self.seekByte(
+            boot["reserved_sectors"].value * self.sector_size
+        ):
             yield padding
 
         # Read the two FAT
@@ -371,7 +365,7 @@ class FAT_FS(Parser):
         if fat_size == 0:
             fat_size = boot["fat32_size"].value
         fat_size *= self.sector_size * 8
-        for i in xrange(boot["fat_nb"].value):
+        for _ in xrange(boot["fat_nb"].value):
             yield FAT(self, "fat[]", "File Allocation Table", size=fat_size)
 
         # Read inode table (Directory)
@@ -392,8 +386,7 @@ class FAT_FS(Parser):
         size = sectors * self.sector_size
         if self._size:
             size = min(size, self.size//8)
-        padding = self.seekByte(size)
-        if padding:
+        if padding := self.seekByte(size):
             yield padding
 
 

@@ -52,12 +52,10 @@ class FileEntry(FieldSet):
         yield String(self, "devminor", 8, "Dev minor", strip=" \0", charset="ASCII")
         yield NullBytes(self, "padding", 167, "Padding (zero)")
 
-        filesize = self.getOctal("size")
-        if filesize:
+        if filesize := self.getOctal("size"):
             yield SubFile(self, "content", filesize, filename=self["name"].value)
 
-        size = paddingSize(self.current_size//8, 512)
-        if size:
+        if size := paddingSize(self.current_size // 8, 512):
             yield NullBytes(self, "padding_end", size, "Padding (512 align)")
 
     def convertOctal(self, chunk):
@@ -78,9 +76,8 @@ class FileEntry(FieldSet):
         else:
             filename = self["name"].value
             filesize = humanFilesize(self.getOctal("size"))
-            desc = "(%s: %s, %s)" % \
-                (filename, self["type"].display, filesize)
-        return "Tar File " + desc
+            desc = f'({filename}: {self["type"].display}, {filesize})'
+        return f"Tar File {desc}"
 
 class TarFile(Parser):
     endian = BIG_ENDIAN

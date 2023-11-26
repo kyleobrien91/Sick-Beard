@@ -92,7 +92,7 @@ class Row(FieldSet):
         self._size = 8*self.channels*4
 
     def createFields(self):
-        for index in xrange(self.channels):
+        for _ in xrange(self.channels):
             yield Note(self, "note[]")
 
 class Pattern(FieldSet):
@@ -102,7 +102,7 @@ class Pattern(FieldSet):
         self._size = 64*8*self.channels*4
 
     def createFields(self):
-        for index in xrange(64):
+        for _ in xrange(64):
             yield Row(self, "row[]", self.channels)
 
 class AmigaModule(Parser):
@@ -119,7 +119,7 @@ class AmigaModule(Parser):
     def validate(self):
         t = self.stream.readBytes(1080*8, 4)
         if t not in MODULE_TYPE:
-            return "Invalid module type '%s'" % t
+            return f"Invalid module type '{t}'"
         self.createValue = lambda t: "%s module, %u channels" % MODULE_TYPE[t]
         return True
 
@@ -141,9 +141,8 @@ class AmigaModule(Parser):
 
         # Yield samples
         for index in xrange(31):
-            count = header["samples/info[%u]/sample_count" % index].value
-            if count:
+            if count := header["samples/info[%u]/sample_count" % index].value:
                 self.info("Yielding sample %u: %u samples" % (index, count))
                 yield RawBytes(self, "sample_data[]", 2*count, \
-                               "Sample %u" % index)
+                                   "Sample %u" % index)
 

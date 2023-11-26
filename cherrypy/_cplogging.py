@@ -24,11 +24,11 @@ class LogManager(object):
         self.logger_root = logger_root
         self.appid = appid
         if appid is None:
-            self.error_log = logging.getLogger("%s.error" % logger_root)
-            self.access_log = logging.getLogger("%s.access" % logger_root)
+            self.error_log = logging.getLogger(f"{logger_root}.error")
+            self.access_log = logging.getLogger(f"{logger_root}.access")
         else:
-            self.error_log = logging.getLogger("%s.error.%s" % (logger_root, appid))
-            self.access_log = logging.getLogger("%s.access.%s" % (logger_root, appid))
+            self.error_log = logging.getLogger(f"{logger_root}.error.{appid}")
+            self.access_log = logging.getLogger(f"{logger_root}.access.{appid}")
         self.error_log.setLevel(logging.INFO)
         self.access_log.setLevel(logging.INFO)
         cherrypy.engine.subscribe('graceful', self.reopen_files)
@@ -167,14 +167,12 @@ class LogManager(object):
                     self._add_builtin_file_handler(log, filename)
             else:
                 self._add_builtin_file_handler(log, filename)
-        else:
-            if h:
-                h.close()
-                log.handlers.remove(h)
+        elif h:
+            h.close()
+            log.handlers.remove(h)
     
     def _get_error_file(self):
-        h = self._get_builtin_handler(self.error_log, "file")
-        if h:
+        if h := self._get_builtin_handler(self.error_log, "file"):
             return h.baseFilename
         return ''
     def _set_error_file(self, newvalue):
@@ -183,8 +181,7 @@ class LogManager(object):
                           doc="The filename for self.error_log.")
     
     def _get_access_file(self):
-        h = self._get_builtin_handler(self.access_log, "file")
-        if h:
+        if h := self._get_builtin_handler(self.access_log, "file"):
             return h.baseFilename
         return ''
     def _set_access_file(self, newvalue):

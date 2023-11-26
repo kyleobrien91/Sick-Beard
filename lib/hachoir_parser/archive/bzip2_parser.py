@@ -42,9 +42,11 @@ class Bzip2Parser(Parser):
     def validate(self):
         if self.stream.readBytes(0, 3) != 'BZh':
             return "Wrong file signature"
-        if not("1" <= self["blocksize"].value <= "9"):
-            return "Wrong blocksize"
-        return True
+        return (
+            "Wrong blocksize"
+            if not ("1" <= self["blocksize"].value <= "9")
+            else True
+        )
 
     def createFields(self):
         yield String(self, "id", 3, "Identifier (BZh)", charset="ASCII")

@@ -8,9 +8,7 @@ class Language:
         self.code = code
 
     def __cmp__(self, other):
-        if other.__class__ != Language:
-            return 1
-        return cmp(self.code, other.code)
+        return 1 if other.__class__ != Language else cmp(self.code, other.code)
 
     def __unicode__(self):
        return ISO639_2[self.code]

@@ -12,7 +12,7 @@ class SubFile(Bytes):
             if not isinstance(filename, unicode):
                 filename = makePrintable(filename, "ISO-8859-1")
             if not description:
-                description = 'File "%s" (%s)' % (filename, humanFilesize(length))
+                description = f'File "{filename}" ({humanFilesize(length)})'
         Bytes.__init__(self, parent, name, length, description)
         def createInputStream(cis, **args):
             tags = args.setdefault("tags",[])
@@ -25,6 +25,7 @@ class SubFile(Bytes):
             if filename:
                 tags.append(( "filename", filename ))
             return cis(**args)
+
         self.setSubIStream(createInputStream)
 
 class CompressedStream:
@@ -66,7 +67,8 @@ def CompressedField(field, decompressor):
             stream = field.stream
         input = CompressedStream(stream, decompressor)
         if source is None:
-            source = "Compressed source: '%s' (offset=%s)" % (stream.source, field.absolute_address)
+            source = f"Compressed source: '{stream.source}' (offset={field.absolute_address})"
         return InputIOStream(input, source=source, **args)
+
     field.setSubIStream(createInputStream)
     return field

@@ -79,7 +79,7 @@ class MasterBootRecord(FieldSet):
 
     def createDescription(self):
         size = self["nb_sectors"].value * self["bios/bytes_per_sector"].value
-        return "NTFS Master Boot Record (%s)" % humanFilesize(size)
+        return f"NTFS Master Boot Record ({humanFilesize(size)})"
 
 class MFT_Flags(FieldSet):
     static_size = 16
@@ -111,18 +111,14 @@ class Attribute(FieldSet):
         yield UInt8(self, "indexed_flag")
         yield NullBytes(self, "padding", 1)
         if self._parser:
-            for field in self._parser(self):
-                yield field
-        else:
-            size = self["length_attr"].value
-            if size:
-                yield RawBytes(self, "data", size)
-        size = (self.size - self.current_size) // 8
-        if size:
+            yield from self._parser(self)
+        elif size := self["length_attr"].value:
+            yield RawBytes(self, "data", size)
+        if size := (self.size - self.current_size) // 8:
             yield PaddingBytes(self, "end_padding", size)
 
     def createDescription(self):
-        return "Attribute %s" % self["type"].display
+        return f'Attribute {self["type"].display}'
     FILENAME_NAMESPACE = {
         0: "POSIX",
         1: "Win32",
@@ -157,18 +153,16 @@ class Attribute(FieldSet):
         yield UInt32(self, "file_flags2", "Used by EAs and Reparse")
         yield UInt8(self, "filename_length", "Filename length in characters")
         yield Enum(UInt8(self, "filename_namespace"), self.FILENAME_NAMESPACE)
-        size = self["filename_length"].value * 2
-        if size:
+        if size := self["filename_length"].value * 2:
             yield String(self, "filename", size, charset="UTF-16-LE")
 
     def parseData(self):
-        size = (self.size - self.current_size) // 8
-        if size:
+        if size := (self.size - self.current_size) // 8:
             yield Bytes(self, "data", size)
 
     def parseBitmap(self):
         size = (self.size - self.current_size)
-        for index in xrange(size):
+        for _ in xrange(size):
             yield Bit(self, "bit[]")
 
     # --- Type information ---
@@ -218,8 +212,7 @@ class File(FieldSet):
         yield NullBytes(self, "reserved", 2)
         yield UInt32(self, "mft_record_number", "Number of this mft record")
 
-        padding = self.seekByte(self["attrs_offset"].value, relative=True)
-        if padding:
+        if padding := self.seekByte(self["attrs_offset"].value, relative=True):
             yield padding
 
         while not self.eof:
@@ -229,22 +222,20 @@ class File(FieldSet):
                 break
             yield Attribute(self, "attr[]")
 
-        size = self["bytes_in_use"].value - self.current_size//8
-        if size:
+        if size := self["bytes_in_use"].value - self.current_size // 8:
             yield RawBytes(self, "end_rawdata", size)
 
-        size = (self.size - self.current_size) // 8
-        if size:
+        if size := (self.size - self.current_size) // 8:
             yield RawBytes(self, "end_padding", size, "Unused but allocated bytes")
 
     def createDescription(self):
         text = "File"
         if "filename/filename" in self:
-            text += ' "%s"' % self["filename/filename"].value
+            text += f' "{self["filename/filename"].value}"'
         if "filename/real_size" in self:
-            text += ' (%s)' % self["filename/real_size"].display
+            text += f' ({self["filename/real_size"].display})'
         if "standard_info/file_attr" in self:
-            text += ', %s' % self["standard_info/file_attr"].display
+            text += f', {self["standard_info/file_attr"].display}'
         return text
 
 class NTFS(Parser):
@@ -262,10 +253,7 @@ class NTFS(Parser):
     def validate(self):
         if self.stream.readBytes(0, len(self.MAGIC)) != self.MAGIC:
             return "Invalid magic string"
-        err = self["mbr/bios"].validate()
-        if err:
-            return err
-        return True
+        return err if (err := self["mbr/bios"].validate()) else True
 
     def createFields(self):
         yield MasterBootRecord(self, "mbr")
@@ -273,13 +261,11 @@ class NTFS(Parser):
         bios = self["mbr/bios"]
         cluster_size = bios["sectors_per_cluster"].value * bios["bytes_per_sector"].value
         offset = self["mbr/mft_cluster"].value * cluster_size
-        padding = self.seekByte(offset, relative=False)
-        if padding:
+        if padding := self.seekByte(offset, relative=False):
             yield padding
-        for index in xrange(1000):
+        for _ in xrange(1000):
             yield File(self, "file[]")
 
-        size = (self.size - self.current_size) // 8
-        if size:
+        if size := (self.size - self.current_size) // 8:
             yield RawBytes(self, "end", size)
 

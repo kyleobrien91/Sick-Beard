@@ -115,7 +115,7 @@ class Server(ServerAdapter):
         """Return the base (scheme://host[:port] or sock file) for this server."""
         if self.socket_file:
             return self.socket_file
-        
+
         host = self.socket_host
         if host in ('0.0.0.0', '::'):
             # 0.0.0.0 is INADDR_ANY and :: is IN6ADDR_ANY.
@@ -123,17 +123,17 @@ class Server(ServerAdapter):
             # safest thing to spit out in a URL.
             import socket
             host = socket.gethostname()
-        
+
         port = self.socket_port
-        
+
         if self.ssl_certificate:
             scheme = "https"
             if port != 443:
-                host += ":%s" % port
+                host += f":{port}"
         else:
             scheme = "http"
             if port != 80:
-                host += ":%s" % port
-        
-        return "%s://%s" % (scheme, host)
+                host += f":{port}"
+
+        return f"{scheme}://{host}"
 

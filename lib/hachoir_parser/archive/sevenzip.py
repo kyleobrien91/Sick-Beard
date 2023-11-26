@@ -114,9 +114,7 @@ class PackInfo(FieldSet):
         yield num
         num = num.value
 
-        for field in waitForID(self, ID_SIZE, "size_marker"):
-            yield field
-
+        yield from waitForID(self, ID_SIZE, "size_marker")
         for size in xrange(num):
             yield SZUInt64(self, "pack_size[]")
 
@@ -158,17 +156,17 @@ class CoderID(FieldSet):
             name = self.stream.readBytes(self.absolute_address+self.current_size, size)
             if name in self.CODECS:
                 name = self.CODECS[name]
-                self.info("Codec is %s" % name)
+                self.info(f"Codec is {name}")
             else:
-                self.info("Undetermined codec %s" % name)
+                self.info(f"Undetermined codec {name}")
                 name = "unknown"
             yield RawBytes(self, name, size)
-            #yield textHandler(Bytes(self, "id", size), lambda: name)
+                #yield textHandler(Bytes(self, "id", size), lambda: name)
         if byte & 0x10:
             yield SZUInt64(self, "num_stream_in")
             yield SZUInt64(self, "num_stream_out")
             self.info("Streams: IN=%u    OUT=%u" % \
-                      (self["num_stream_in"].value, self["num_stream_out"].value))
+                          (self["num_stream_in"].value, self["num_stream_out"].value))
         if byte & 0x20:
             size = SZUInt64(self, "properties_size[]")
             yield size
@@ -220,7 +218,7 @@ class FolderItem(FieldSet):
         self.info("Folder: %u codecs" % num)
 
         # Coders info
-        for index in xrange(num):
+        for _ in xrange(num):
             ci = CoderInfo(self, "coder_info[]")
             yield ci
             self.in_streams += ci.in_streams
@@ -228,16 +226,14 @@ class FolderItem(FieldSet):
 
         # Bin pairs
         self.info("out streams: %u" % self.out_streams)
-        for index in xrange(self.out_streams-1):
+        for _ in xrange(self.out_streams-1):
             yield BindPairInfo(self, "bind_pair[]")
 
         # Packed streams
         # @todo: Actually find mapping
         packed_streams = self.in_streams - self.out_streams + 1
-        if packed_streams == 1:
-            pass
-        else:
-            for index in xrange(packed_streams):
+        if packed_streams != 1:
+            for _ in xrange(packed_streams):
                 yield SZUInt64(self, "pack_stream[]")
 
 
@@ -245,8 +241,7 @@ class UnpackInfo(FieldSet):
     def createFields(self):
         yield Enum(UInt8(self, "id"), ID_INFO)
         # Wait for synch
-        for field in waitForID(self, ID_FOLDER, "folder_marker"):
-            yield field
+        yield from waitForID(self, ID_FOLDER, "folder_marker")
         yield SZUInt64(self, "num_folders")
 
         # Get generic info
@@ -255,15 +250,14 @@ class UnpackInfo(FieldSet):
         yield UInt8(self, "is_external")
 
         # Read folder items
-        for folder_index in xrange(num):
+        for _ in xrange(num):
             yield FolderItem(self, "folder_item[]")
 
         # Get unpack sizes for each coder of each folder
-        for field in waitForID(self, ID_CODERS_UNPACK_SIZE, "coders_unpsize_marker"):
-            yield field
+        yield from waitForID(self, ID_CODERS_UNPACK_SIZE, "coders_unpsize_marker")
         for folder_index in xrange(num):
             folder_item = self["folder_item[%u]" % folder_index]
-            for index in xrange(folder_item.out_streams):
+            for _ in xrange(folder_item.out_streams):
                 #yield UInt8(self, "unpack_size[]")
                 yield SZUInt64(self, "unpack_size[]")
 
@@ -339,7 +333,10 @@ class Body(FieldSet):
         self._size = 8*self["/signature/start_hdr/next_hdr_offset"].value
     def createFields(self):
         if "encoded_hdr" in self["/next_hdr/"]:
-            pack_size = sum([s.value for s in self.array("/next_hdr/encoded_hdr/pack_info/pack_size")])
+            pack_size = sum(
+                s.value
+                for s in self.array("/next_hdr/encoded_hdr/pack_info/pack_size")
+            )
             body_size = self["/next_hdr/encoded_hdr/pack_info/pack_pos"].value
             yield RawBytes(self, "compressed_data", body_size, "Compressed data")
             # Here we could check if copy method was used to "compress" it,

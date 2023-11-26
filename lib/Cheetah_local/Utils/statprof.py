@@ -169,9 +169,6 @@ class ProfileState(object):
         elif not hasattr(self, 'sample_interval'):
             # default to 100 Hz
             self.sample_interval = 1.0/100.0
-        else:
-            # leave the frequency as it was
-            pass
         self.remaining_prof_time = None
         # for user start/stop nesting
         self.profile_level = 0

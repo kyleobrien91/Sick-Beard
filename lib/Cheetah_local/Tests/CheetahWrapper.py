@@ -68,10 +68,10 @@ class CFBase(unittest.TestCase):
         if not os.environ.get('PYTHONPATH'):
             os.environ['PYTHONPATH'] = pythonPath
         else:
-            os.environ['PYTHONPATH'] = '%s:%s' % (os.environ['PYTHONPATH'], pythonPath)
+            os.environ['PYTHONPATH'] = f"{os.environ['PYTHONPATH']}:{pythonPath}"
         I = self.inform
         # Step 1: Create the scratch directory and chdir into it.
-        self.scratchDir = scratchDir = tempfile.mktemp() 
+        self.scratchDir = scratchDir = tempfile.mktemp()
         os.mkdir(scratchDir)
         self.origCwd = os.getcwd()
         os.chdir(scratchDir)
@@ -82,9 +82,8 @@ class CFBase(unittest.TestCase):
             os.mkdir(dir)
         # Step 3: Create the .tmpl files, each in its proper directory.
         for fil in self.srcFiles:
-            f = open(fil, 'w')
-            f.write("Hello, world!\n")
-            f.close()
+            with open(fil, 'w') as f:
+                f.write("Hello, world!\n")
 
     def tearDown(self):
         os.chdir(self.origCwd)
@@ -93,7 +92,7 @@ class CFBase(unittest.TestCase):
             if os.path.exists(self.scratchDir):
                 warn("Warning: unable to delete scratch directory %s")
         else:
-            warn("Warning: not deleting scratch directory %s" % self.scratchDir)
+            warn(f"Warning: not deleting scratch directory {self.scratchDir}")
 
 
     def _checkDestFileHelper(self, path, expected, 
@@ -110,11 +109,10 @@ class CFBase(unittest.TestCase):
         """
         path = os.path.abspath(path)
         exists = os.path.exists(path)
-        msg = "destination file missing: %s" % path
+        msg = f"destination file missing: {path}"
         self.failUnless(exists, msg)
-        f = open(path, 'r')
-        result = f.read()
-        f.close()
+        with open(path, 'r') as f:
+            result = f.read()
         if allowSurroundingText:
             success = result.find(expected) != -1
         else:
@@ -147,11 +145,11 @@ Found %(result)r"""
            __init__.py file.
         """
         exists = os.path.exists(path)
-        msg = "destination subdirectory %s misssing" % path
+        msg = f"destination subdirectory {path} misssing"
         self.failUnless(exists, msg)
         initPath = os.path.join(path, "__init__.py")
         exists = os.path.exists(initPath)
-        msg = "destination init file missing: %s" % initPath
+        msg = f"destination init file missing: {initPath}"
         self.failUnless(exists, msg)
 
 
@@ -159,7 +157,7 @@ Found %(result)r"""
         """Verify 'path' does not exist.  (To check --nobackup.)
         """
         exists = os.path.exists(path)
-        msg = "backup file exists in spite of --nobackup: %s" % path
+        msg = f"backup file exists in spite of --nobackup: {path}"
         self.failIf(exists, msg)
 
     def locate_cheetah(self, cmd):
@@ -518,17 +516,17 @@ class NoBackup(CFBase):
     def testCompile(self):
         self.go("cheetah compile --nobackup a.tmpl")
         self.go("cheetah compile --nobackup a.tmpl")
-        self.checkNoBackup("a.py" + BACKUP_SUFFIX)
+        self.checkNoBackup(f"a.py{BACKUP_SUFFIX}")
 
     def testFill(self):
         self.go("cheetah fill --nobackup a.tmpl")
         self.go("cheetah fill --nobackup a.tmpl")
-        self.checkNoBackup("a.html" + BACKUP_SUFFIX)
+        self.checkNoBackup(f"a.html{BACKUP_SUFFIX}")
 
     def testText(self):
         self.go("cheetah fill --nobackup --oext txt a.tmpl")
         self.go("cheetah fill --nobackup --oext txt a.tmpl")
-        self.checkNoBackup("a.txt" + BACKUP_SUFFIX)
+        self.checkNoBackup(f"a.txt{BACKUP_SUFFIX}")
 
 def listTests(cheetahWrapperFile):
     """cheetahWrapperFile, string, path of this script.
@@ -536,15 +534,13 @@ def listTests(cheetahWrapperFile):
        XXX TODO: don't print test where expectError is true.
     """
     rx = re.compile( R'self\.go\("(.*?)"\)' )
-    f = open(cheetahWrapperFile)
-    while True:
-        lin = f.readline()
-        if not lin:
-            break
-        m = rx.search(lin)
-        if m:
-            print(m.group(1))
-    f.close()
+    with open(cheetahWrapperFile) as f:
+        while True:
+            lin = f.readline()
+            if not lin:
+                break
+            if m := rx.search(lin):
+                print(m.group(1))
 
 def main():
     global DELETE, OUTPUT
@@ -569,7 +565,7 @@ def main():
         del sys.argv[1:]
         for opt in ("explain", "verbose", "quiet"):
             if getattr(opts, opt):
-                sys.argv.append("--" + opt)
+                sys.argv.append(f"--{opt}")
         sys.argv.extend(files)
         unittest.main()
         

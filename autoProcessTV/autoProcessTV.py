@@ -30,11 +30,10 @@ class AuthURLOpener(urllib.FancyURLopener):
         urllib.FancyURLopener.__init__(self)
     
     def prompt_user_passwd(self, host, realm):
-        if self.numTries == 0:
-            self.numTries = 1
-            return (self.username, self.password)
-        else:
+        if self.numTries != 0:
             return ('', '')
+        self.numTries = 1
+        return (self.username, self.password)
 
     def openit(self, url):
         self.numTries = 0

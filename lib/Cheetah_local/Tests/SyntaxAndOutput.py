@@ -70,18 +70,17 @@ defaultTestNameSpace = {
     'anInt': 1,
     'aFloat': 1.5,
     'aList': ['item0', 'item1', 'item2'],
-    'aDict': {'one': 'item1',
-              'two': 'item2',
-              'nestedDict': {1:'nestedItem1',
-                          'two':'nestedItem2'
-                          },
-              'nestedFunc': dummyFunc,
-              },
+    'aDict': {
+        'one': 'item1',
+        'two': 'item2',
+        'nestedDict': {1: 'nestedItem1', 'two': 'nestedItem2'},
+        'nestedFunc': dummyFunc,
+    },
     'aFunc': dummyFunc,
     'anObj': DummyClass(),
     'aMeth': DummyClass().meth1,
     'aStrToBeIncluded': "$aStr $anInt",
-    'none': None,  
+    'none': None,
     'emptyString': '',
     'numOne': 1,
     'numTwo': 2,
@@ -91,21 +90,23 @@ defaultTestNameSpace = {
     'strip1': '  \t   strippable whitespace   \t\t  \n',
     'strip2': '  \t   strippable whitespace   \t\t  ',
     'strip3': '  \t   strippable whitespace   \t\t\n1 2  3\n',
-    
     'blockToBeParsed': """$numOne $numTwo""",
     'includeBlock2': """$numOne $numTwo $aSetVar""",
-    
     'includeFileName': 'parseTest.txt',
-    'listOfLambdas': [lambda x: x, lambda x: x, lambda x: x,],
+    'listOfLambdas': [
+        lambda x: x,
+        lambda x: x,
+        lambda x: x,
+    ],
     'list': [
-    	{'index': 0, 'numOne': 1, 'numTwo': 2},
-    	{'index': 1, 'numOne': 1, 'numTwo': 2},
-        ],
+        {'index': 0, 'numOne': 1, 'numTwo': 2},
+        {'index': 1, 'numOne': 1, 'numTwo': 2},
+    ],
     'nameList': [('john', 'doe'), ('jane', 'smith')],
     'letterList': ['a', 'b', 'c'],
-    '_': lambda x: 'Translated: ' + x,
+    '_': lambda x: f'Translated: {x}',
     'unicodeData': u'aoeu12345\u1234',
-    }
+}
 
 
 ##################################################
@@ -660,7 +661,7 @@ class Placeholders_Vals(OutputTest):
     def test8(self):
         """True, False
         """
-        self.verify("$True $False", "%s %s"%(repr(True), repr(False)))
+        self.verify("$True $False", f"{repr(True)} {repr(False)}")
 
     def test9(self):
         """$_

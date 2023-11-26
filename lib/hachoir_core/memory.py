@@ -49,7 +49,7 @@ try:
     def getMemoryLimit():
         try:
             limit = getrlimit(RLIMIT_AS)[0]
-            if 0 < limit:
+            if limit > 0:
                 limit *= PAGE_SIZE
             return limit
         except ValueError:

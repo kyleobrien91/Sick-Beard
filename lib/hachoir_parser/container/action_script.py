@@ -32,7 +32,7 @@ class FlashFloat64(FieldSet):
         bytes = self.parent.stream.readBytes(
             self.absolute_address, self.size//8)
         # Mix bytes: xxxxyyyy <=> yyyyxxxx
-        bytes = bytes[4:8] + bytes[0:4]
+        bytes = bytes[4:8] + bytes[:4]
         return unpack('<d', bytes)[0]
 
 TYPE_INFO = {
@@ -55,7 +55,7 @@ def parseDeclareFunction(parent, size):
     yield CString(parent, "name")
     argCount = UInt16(parent, "arg_count")
     yield argCount
-    for i in range(argCount.value):
+    for _ in range(argCount.value):
         yield CString(parent, "arg[]")
     yield UInt16(parent, "function_length")
 
@@ -74,7 +74,7 @@ def parseDeclareFunctionV7(parent, size):
     yield Bit(parent, "preload_arguments")
     yield Bit(parent, "suppress_this")
     yield Bit(parent, "preload_this")
-    for i in range(argCount.value):
+    for _ in range(argCount.value):
         yield UInt8(parent, "register[]")
         yield CString(parent, "arg[]")
     yield UInt16(parent, "function_length")
@@ -99,7 +99,7 @@ def parsePushData(parent, size):
         yield codeobj
         code = codeobj.value
         if code not in TYPE_INFO:
-            raise ParserError("Unknown type in Push_Data : " + hex(code))
+            raise ParserError(f"Unknown type in Push_Data : {hex(code)}")
         parser, name = TYPE_INFO[code]
         if parser:
             yield parser(parent, name)
@@ -138,7 +138,7 @@ def parseWaitForFrameDyn(parent, size):
 def parseDeclareDictionnary(parent, size):
     count = UInt16(parent, "count")
     yield count
-    for i in range(count.value):
+    for _ in range(count.value):
         yield CString(parent, "dictionnary[]")
 
 def parseStoreRegister(parent, size):
@@ -267,10 +267,7 @@ class Instruction(FieldSet):
     def __init__(self, *args):
         FieldSet.__init__(self, *args)
         code = self["action_id"].value
-        if code & 128:
-            self._size = (3 + self["action_length"].value) * 8
-        else:
-            self._size = 8
+        self._size = (3 + self["action_length"].value) * 8 if code & 128 else 8
         if code in self.ACTION_INFO:
             self._name, self._description, self.parser = self.ACTION_INFO[code]
         else:
@@ -285,8 +282,7 @@ class Instruction(FieldSet):
         if not size:
             return
         if self.parser:
-            for field in self.parser(self, size):
-                yield field
+            yield from self.parser(self, size)
         else:
             yield RawBytes(self, "action_data", size)
 

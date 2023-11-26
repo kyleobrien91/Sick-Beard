@@ -8,8 +8,7 @@ class BenchmarkError(Exception):
     Error during benchmark, use str(err) to format it as string.
     """
     def __init__(self, message):
-        Exception.__init__(self,
-            "Benchmark internal error: %s" % message)
+        Exception.__init__(self, f"Benchmark internal error: {message}")
 
 class BenchmarkStat:
     """

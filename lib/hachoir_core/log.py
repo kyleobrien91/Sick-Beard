@@ -72,27 +72,25 @@ class Log:
         """
 
         if level < self.LOG_ERROR and config.quiet or \
-           level <= self.LOG_INFO and not config.verbose:
+               level <= self.LOG_INFO and not config.verbose:
             return
         if config.debug:
             from lib.hachoir_core.error import getBacktrace
-            backtrace = getBacktrace(None)
-            if backtrace:
+            if backtrace := getBacktrace(None):
                 text += "\n\n" + backtrace
 
         _text = text
         if hasattr(ctxt, "_logger"):
             _ctxt = ctxt._logger()
             if _ctxt is not None:
-                text = "[%s] %s" % (_ctxt, text)
+                text = f"[{_ctxt}] {text}"
 
-        # Add message to log buffer
         if self.use_buffer:
-            if not self.__buffer.has_key(level):
-                self.__buffer[level] = [text]
-            else:
+            if self.__buffer.has_key(level):
                 self.__buffer[level].append(text)
 
+            else:
+                self.__buffer[level] = [text]
         # Add prefix
         prefix = self.level_name.get(level, "[info]")
 
@@ -104,7 +102,7 @@ class Log:
 
         # Write into outfile (if used)
         if self.__file:
-            self._writeIntoFile("%s %s" % (prefix, text))
+            self._writeIntoFile(f"{prefix} {text}")
 
         # Use callback (if used)
         if self.on_new_message:
@@ -135,7 +133,7 @@ log = Log()
 
 class Logger(object):
     def _logger(self):
-        return "<%s>" % self.__class__.__name__
+        return f"<{self.__class__.__name__}>"
     def info(self, text):
         log.newMessage(Log.LOG_INFO, text, self)
     def warning(self, text):

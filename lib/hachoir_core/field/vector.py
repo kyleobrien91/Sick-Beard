@@ -5,9 +5,8 @@ class GenericVector(FieldSet):
         # Sanity checks
         assert issubclass(item_class, Field)
         assert isinstance(item_class.static_size, (int, long))
-        if not(0 < nb_items):
-            raise ParserError('Unable to create empty vector "%s" in %s' \
-                % (name, parent.path))
+        if nb_items <= 0:
+            raise ParserError(f'Unable to create empty vector "{name}" in {parent.path}')
         size = nb_items * item_class.static_size
         self.__nb_items = nb_items
         self._item_class = item_class
@@ -18,9 +17,9 @@ class GenericVector(FieldSet):
         return self.__nb_items
 
     def createFields(self):
-        name = self._item_name + "[]"
+        name = f"{self._item_name}[]"
         parser = self._item_class
-        for index in xrange(len(self)):
+        for _ in xrange(len(self)):
             yield parser(self, name)
 
 class UserVector(GenericVector):

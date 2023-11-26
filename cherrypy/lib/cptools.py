@@ -36,19 +36,19 @@ def validate_etags(autotags=False, debug=False):
     See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.24
     """
     response = cherrypy.serving.response
-    
+
     # Guard against being run twice.
     if hasattr(response, "ETag"):
         return
-    
+
     status, reason, msg = _httputil.valid_status(response.status)
-    
+
     etag = response.headers.get('ETag')
-    
+
     # Automatic ETag generation. See warning in docstring.
     if etag:
         if debug:
-            cherrypy.log('ETag already set: %s' % etag, 'TOOLS.ETAGS')
+            cherrypy.log(f'ETag already set: {etag}', 'TOOLS.ETAGS')
     elif not autotags:
         if debug:
             cherrypy.log('Autotags off', 'TOOLS.ETAGS')
@@ -57,38 +57,36 @@ def validate_etags(autotags=False, debug=False):
             cherrypy.log('Status not 200', 'TOOLS.ETAGS')
     else:
         etag = response.collapse_body()
-        etag = '"%s"' % md5(etag).hexdigest()
+        etag = f'"{md5(etag).hexdigest()}"'
         if debug:
-            cherrypy.log('Setting ETag: %s' % etag, 'TOOLS.ETAGS')
+            cherrypy.log(f'Setting ETag: {etag}', 'TOOLS.ETAGS')
         response.headers['ETag'] = etag
-    
+
     response.ETag = etag
-    
+
     # "If the request would, without the If-Match header field, result in
     # anything other than a 2xx or 412 status, then the If-Match header
     # MUST be ignored."
     if debug:
-        cherrypy.log('Status: %s' % status, 'TOOLS.ETAGS')
+        cherrypy.log(f'Status: {status}', 'TOOLS.ETAGS')
     if status >= 200 and status <= 299:
         request = cherrypy.serving.request
-        
+
         conditions = request.headers.elements('If-Match') or []
         conditions = [str(x) for x in conditions]
         if debug:
-            cherrypy.log('If-Match conditions: %s' % repr(conditions),
-                         'TOOLS.ETAGS')
-        if conditions and not (conditions == ["*"] or etag in conditions):
+            cherrypy.log(f'If-Match conditions: {repr(conditions)}', 'TOOLS.ETAGS')
+        if conditions and conditions != ["*"] and etag not in conditions:
             raise cherrypy.HTTPError(412, "If-Match failed: ETag %r did "
                                      "not match %r" % (etag, conditions))
-        
+
         conditions = request.headers.elements('If-None-Match') or []
         conditions = [str(x) for x in conditions]
         if debug:
-            cherrypy.log('If-None-Match conditions: %s' % repr(conditions),
-                         'TOOLS.ETAGS')
+            cherrypy.log(f'If-None-Match conditions: {repr(conditions)}', 'TOOLS.ETAGS')
         if conditions == ["*"] or etag in conditions:
             if debug:
-                cherrypy.log('request.method: %s' % request.method, 'TOOLS.ETAGS')
+                cherrypy.log(f'request.method: {request.method}', 'TOOLS.ETAGS')
             if request.method in ("GET", "HEAD"):
                 raise cherrypy.HTTPRedirect([], 304)
             else:
@@ -102,17 +100,16 @@ def validate_since():
     will be performed.
     """
     response = cherrypy.serving.response
-    lastmod = response.headers.get('Last-Modified')
-    if lastmod:
+    if lastmod := response.headers.get('Last-Modified'):
         status, reason, msg = _httputil.valid_status(response.status)
-        
+
         request = cherrypy.serving.request
-        
+
         since = request.headers.get('If-Unmodified-Since')
         if since and since != lastmod:
             if (status >= 200 and status <= 299) or status == 412:
                 raise cherrypy.HTTPError(412)
-        
+
         since = request.headers.get('If-Modified-Since')
         if since and since == lastmod:
             if (status >= 200 and status <= 299) or status == 304:
@@ -143,20 +140,15 @@ def proxy(base=None, local='X-Forwarded-Host', remote='X-Forwarded-For',
     """
     
     request = cherrypy.serving.request
-    
+
     if scheme:
         s = request.headers.get(scheme, None)
         if debug:
             cherrypy.log('Testing scheme %r:%r' % (scheme, s), 'TOOLS.PROXY')
-        if s == 'on' and 'ssl' in scheme.lower():
-            # This handles e.g. webfaction's 'X-Forwarded-Ssl: on' header
-            scheme = 'https'
-        else:
-            # This is for lighttpd/pound/Mongrel's 'X-Forwarded-Proto: https'
-            scheme = s
+        scheme = 'https' if s == 'on' and 'ssl' in scheme.lower() else s
     if not scheme:
         scheme = request.base[:request.base.find("://")]
-    
+
     if local:
         lbase = request.headers.get(local, None)
         if debug:
@@ -165,17 +157,13 @@ def proxy(base=None, local='X-Forwarded-Host', remote='X-Forwarded-For',
             base = lbase.split(',')[0]
     if not base:
         port = request.local.port
-        if port == 80:
-            base = '127.0.0.1'
-        else:
-            base = '127.0.0.1:%s' % port
-    
+        base = '127.0.0.1' if port == 80 else f'127.0.0.1:{port}'
     if base.find("://") == -1:
         # add http:// or https:// if needed
-        base = scheme + "://" + base
-    
+        base = f"{scheme}://{base}"
+
     request.base = base
-    
+
     if remote:
         xff = request.headers.get(remote)
         if debug:
@@ -206,8 +194,10 @@ def ignore_headers(headers=('Range',), debug=False):
 def response_headers(headers=None, debug=False):
     """Set headers on the response."""
     if debug:
-        cherrypy.log('Setting response headers: %s' % repr(headers),
-                     'TOOLS.RESPONSE_HEADERS')
+        cherrypy.log(
+            f'Setting response headers: {repr(headers)}',
+            'TOOLS.RESPONSE_HEADERS',
+        )
     for name, value in (headers or []):
         cherrypy.serving.response.headers[name] = value
 response_headers.failsafe = True
@@ -278,8 +268,7 @@ Message: %(error_msg)s
     def do_login(self, username, password, from_page='..', **kwargs):
         """Login. May raise redirect, or return True if request handled."""
         response = cherrypy.serving.response
-        error_msg = self.check_username_and_password(username, password)
-        if error_msg:
+        if error_msg := self.check_username_and_password(username, password):
             body = self.login_screen(from_page, username, error_msg)
             response.body = body
             if "Content-Length" in response.headers:
@@ -369,8 +358,13 @@ session_auth.__doc__ = """Session authentication hook.
 Any attribute of the SessionAuth class may be overridden via a keyword arg
 to this function:
 
-""" + "\n".join(["%s: %s" % (k, type(getattr(SessionAuth, k)).__name__)
-                 for k in dir(SessionAuth) if not k.startswith("__")])
+""" + "\n".join(
+    [
+        f"{k}: {type(getattr(SessionAuth, k)).__name__}"
+        for k in dir(SessionAuth)
+        if not k.startswith("__")
+    ]
+)
 
 
 def log_traceback(severity=logging.ERROR, debug=False):
@@ -379,13 +373,13 @@ def log_traceback(severity=logging.ERROR, debug=False):
 
 def log_request_headers(debug=False):
     """Write request headers to the cherrypy error log."""
-    h = ["  %s: %s" % (k, v) for k, v in cherrypy.serving.request.header_list]
+    h = [f"  {k}: {v}" for k, v in cherrypy.serving.request.header_list]
     cherrypy.log('\nRequest Headers:\n' + '\n'.join(h), "HTTP")
 
 def log_hooks(debug=False):
     """Write request.hooks to the cherrypy error log."""
     request = cherrypy.serving.request
-    
+
     msg = []
     # Sort by the standard points if possible.
     from cherrypy import _cprequest
@@ -393,13 +387,12 @@ def log_hooks(debug=False):
     for k in request.hooks.keys():
         if k not in points:
             points.append(k)
-    
+
     for k in points:
-        msg.append("    %s:" % k)
+        msg.append(f"    {k}:")
         v = request.hooks.get(k, [])
         v.sort()
-        for h in v:
-            msg.append("        %r" % h)
+        msg.extend("        %r" % h for h in v)
     cherrypy.log('\nRequest Hooks for ' + cherrypy.url() + 
                  ':\n' + '\n'.join(msg), "HTTP")
 
@@ -418,7 +411,7 @@ def trailing_slash(missing=True, extra=False, status=None, debug=False):
     """Redirect if path_info has (missing|extra) trailing slash."""
     request = cherrypy.serving.request
     pi = request.path_info
-    
+
     if debug:
         cherrypy.log('is_index: %r, missing: %r, extra: %r, path_info: %r' % 
                      (request.is_index, missing, extra, pi),
@@ -426,7 +419,7 @@ def trailing_slash(missing=True, extra=False, status=None, debug=False):
     if request.is_index is True:
         if missing:
             if not pi.endswith('/'):
-                new_url = cherrypy.url(pi + '/', request.query_string)
+                new_url = cherrypy.url(f'{pi}/', request.query_string)
                 raise cherrypy.HTTPRedirect(new_url, status=status or 301)
     elif request.is_index is False:
         if extra:
@@ -487,16 +480,8 @@ def accept(media=None, debug=False):
     if isinstance(media, basestring):
         media = [media]
     request = cherrypy.serving.request
-    
-    # Parse the Accept request header, and try to match one
-    # of the requested media-ranges (in order of preference).
-    ranges = request.headers.elements('Accept')
-    if not ranges:
-        # Any media type is acceptable.
-        if debug:
-            cherrypy.log('No Accept header elements', 'TOOLS.ACCEPT')
-        return media[0]
-    else:
+
+    if ranges := request.headers.elements('Accept'):
         # Note that 'ranges' is sorted in order of preference
         for element in ranges:
             if element.qvalue > 0:
@@ -511,25 +496,25 @@ def accept(media=None, debug=False):
                     for m in media:
                         if m.startswith(mtype):
                             if debug:
-                                cherrypy.log('Match due to %s' % element.value,
-                                             'TOOLS.ACCEPT')
+                                cherrypy.log(f'Match due to {element.value}', 'TOOLS.ACCEPT')
                             return m
-                else:
-                    # Matches exact value
-                    if element.value in media:
-                        if debug:
-                            cherrypy.log('Match due to %s' % element.value,
-                                         'TOOLS.ACCEPT')
-                        return element.value
-    
+                elif element.value in media:
+                    if debug:
+                        cherrypy.log(f'Match due to {element.value}', 'TOOLS.ACCEPT')
+                    return element.value
+
+    else:
+        # Any media type is acceptable.
+        if debug:
+            cherrypy.log('No Accept header elements', 'TOOLS.ACCEPT')
+        return media[0]
     # No suitable media-range found.
     ah = request.headers.get('Accept')
     if ah is None:
         msg = "Your client did not send an Accept header."
     else:
-        msg = "Your client sent this Accept header: %s." % ah
-    msg += (" But this resource only emits these media types: %s." % 
-            ", ".join(media))
+        msg = f"Your client sent this Accept header: {ah}."
+    msg += f' But this resource only emits these media types: {", ".join(media)}.'
     raise cherrypy.HTTPError(406, msg)
 
 
@@ -558,23 +543,25 @@ class MonitoredHeaderMap(_httputil.HeaderMap):
 def autovary(ignore=None, debug=False):
     """Auto-populate the Vary response header based on request.header access."""
     request = cherrypy.serving.request
-    
+
     req_h = request.headers
     request.headers = MonitoredHeaderMap()
     request.headers.update(req_h)
     if ignore is None:
-        ignore = set(['Content-Disposition', 'Content-Length', 'Content-Type'])
-    
+        ignore = {'Content-Disposition', 'Content-Length', 'Content-Type'}
+
     def set_response_header():
         resp_h = cherrypy.serving.response.headers
-        v = set([e.value for e in resp_h.elements('Vary')])
+        v = {e.value for e in resp_h.elements('Vary')}
         if debug:
-            cherrypy.log('Accessed headers: %s' % request.headers.accessed_headers,
-                         'TOOLS.AUTOVARY')
+            cherrypy.log(
+                f'Accessed headers: {request.headers.accessed_headers}',
+                'TOOLS.AUTOVARY',
+            )
         v = v.union(request.headers.accessed_headers)
         v = v.difference(ignore)
-        v = list(v)
-        v.sort()
+        v = sorted(v)
         resp_h['Vary'] = ', '.join(v)
+
     request.hooks.attach('before_finalize', set_response_header, 95)
 

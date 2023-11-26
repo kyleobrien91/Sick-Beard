@@ -77,7 +77,7 @@ class AuFile(Parser):
         yield UInt32(self, "channels", "Number of interleaved channels")
 
         size = self["data_ofs"].value - self.current_size // 8
-        if 0 < size:
+        if size > 0:
             yield String(self, "info", size, "Information", strip=" \0", charset="ISO-8859-1")
 
         size = min(self["data_size"].value, (self.size - self.current_size) // 8)

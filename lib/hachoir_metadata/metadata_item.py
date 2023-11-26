@@ -136,10 +136,7 @@ class Data:
         return self.values[index]
 
     def __contains__(self, value):
-        for item in self.values:
-            if value == item.value:
-                return True
-        return False
+        return any(value == item.value for item in self.values)
 
     def __cmp__(self, other):
         return cmp(self.priority, other.priority)

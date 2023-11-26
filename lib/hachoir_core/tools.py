@@ -28,15 +28,17 @@ def deprecated(comment=None):
     """
     def _deprecated(func):
         def newFunc(*args, **kwargs):
-            message = "Call to deprecated function %s" % func.__name__
+            message = f"Call to deprecated function {func.__name__}"
             if comment:
-                message += ": " + comment
+                message += f": {comment}"
             warn(message, category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
+
         newFunc.__name__ = func.__name__
         newFunc.__doc__ = func.__doc__
         newFunc.__dict__.update(func.__dict__)
         return newFunc
+
     return _deprecated
 
 def paddingSize(value, align):
@@ -52,10 +54,7 @@ def paddingSize(value, align):
 
     Note: (value + paddingSize(value, align)) == alignValue(value, align)
     """
-    if value % align != 0:
-        return align - (value % align)
-    else:
-        return 0
+    return align - (value % align) if value % align != 0 else 0
 
 def alignValue(value, align):
     """
@@ -71,10 +70,7 @@ def alignValue(value, align):
     Note: alignValue(value, align) == (value + paddingSize(value, align))
     """
 
-    if value % align != 0:
-        return value + align - (value % align)
-    else:
-        return value
+    return value + align - (value % align) if value % align != 0 else value
 
 def timedelta2seconds(delta):
     """
@@ -132,7 +128,7 @@ def humanDuration(delta):
 
     # Milliseconds
     text = []
-    if 1000 <= delta.microseconds:
+    if delta.microseconds >= 1000:
         text.append(u"%u ms" % (delta.microseconds//1000))
 
     # Seconds
@@ -151,7 +147,7 @@ def humanDuration(delta):
         text.append(ngettext("%u day", "%u days", days) % days)
     if years:
         text.append(ngettext("%u year", "%u years", years) % years)
-    if 3 < len(text):
+    if len(text) > 3:
         text = text[-3:]
     elif not text:
         return u"0 ms"
@@ -237,7 +233,7 @@ def humanFrequency(hertz):
         hertz = hertz / divisor
         if hertz < divisor:
             return u"%.1f %s" % (hertz, unit)
-    return u"%s %s" % (hertz, unit)
+    return f"{hertz} {unit}"
 
 regex_control_code = re.compile(r"([\x00-\x1f\x7f])")
 controlchars = tuple({
@@ -404,28 +400,18 @@ def humanUnixAttributes(mode):
         if stat.S_ISDIR (mode): return 'd'
         if stat.S_ISFIFO(mode): return 'p'
         if stat.S_ISLNK (mode): return 'l'
-        if stat.S_ISSOCK(mode): return 's'
-        return '?'
+        return 's' if stat.S_ISSOCK(mode) else '?'
 
     chars = [ ftypelet(mode), 'r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x' ]
     for i in xrange(1, 10):
         if not mode & 1 << 9 - i:
             chars[i] = '-'
     if mode & stat.S_ISUID:
-        if chars[3] != 'x':
-            chars[3] = 'S'
-        else:
-            chars[3] = 's'
+        chars[3] = 'S' if chars[3] != 'x' else 's'
     if mode & stat.S_ISGID:
-        if chars[6] != 'x':
-            chars[6] = 'S'
-        else:
-            chars[6] = 's'
+        chars[6] = 'S' if chars[6] != 'x' else 's'
     if mode & stat.S_ISVTX:
-        if chars[9] != 'x':
-            chars[9] = 'T'
-        else:
-            chars[9] = 't'
+        chars[9] = 'T' if chars[9] != 'x' else 't'
     return u"%s (%o)" % (''.join(chars), mode)
 
 def createDict(data, index):
@@ -439,7 +425,7 @@ def createDict(data, index):
     >>> createDict(data, 2)
     {10: 'a', 20: 'b'}
     """
-    return dict( (key,values[index]) for key, values in data.iteritems() )
+    return {key: values[index] for key, values in data.iteritems()}
 
 # Start of UNIX timestamp (Epoch): 1st January 1970 at 00:00
 UNIX_TIMESTAMP_T0 = datetime(1970, 1, 1)

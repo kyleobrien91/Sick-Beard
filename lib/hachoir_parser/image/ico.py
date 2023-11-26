@@ -37,9 +37,7 @@ class IconHeader(FieldSet):
                 return True
         else:
             return False
-        if self["bpp"].value == 0 and self["planes"].value == 0:
-            return True
-        return False
+        return self["bpp"].value == 0 and self["planes"].value == 0
 
 class IconData(FieldSet):
     def __init__(self, parent, name, header):
@@ -101,7 +99,7 @@ class IcoFile(Parser):
                 index += 1
                 if not field.isValid():
                     return "Invalid header #%u" % index
-            elif 0 <= index:
+            elif index >= 0:
                 break
         return True
 
@@ -110,7 +108,7 @@ class IcoFile(Parser):
         yield Enum(UInt16(self, "type", "Resource type"), self.TYPE_NAME)
         yield UInt16(self, "nb_items", "Number of items")
         items = []
-        for index in xrange(self["nb_items"].value):
+        for _ in xrange(self["nb_items"].value):
             item = IconHeader(self, "icon_header[]")
             yield item
             items.append(item)
@@ -120,15 +118,13 @@ class IcoFile(Parser):
             yield IconData(self, "icon_data[]", header)
 
     def createDescription(self):
-        desc = "Microsoft Windows %s" % self["type"].display
-        size = []
-        for header in self.array("icon_header"):
-            size.append("%ux%ux%u" % (header["width"].value,
-                header["height"].value, header["bpp"].value))
-        if size:
-            return "%s: %s" % (desc, ", ".join(size))
-        else:
-            return desc
+        desc = f'Microsoft Windows {self["type"].display}'
+        size = [
+            "%ux%ux%u"
+            % (header["width"].value, header["height"].value, header["bpp"].value)
+            for header in self.array("icon_header")
+        ]
+        return f'{desc}: {", ".join(size)}' if size else desc
 
     def createContentSize(self):
         count = self["nb_items"].value

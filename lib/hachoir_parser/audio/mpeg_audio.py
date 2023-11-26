@@ -71,10 +71,10 @@ class Frame(FieldSet):
     def __init__(self, *args, **kw):
         FieldSet.__init__(self, *args, **kw)
         if not self._size:
-            frame_size = self.getFrameSize()
-            if not frame_size:
-                raise ParserError("MPEG audio: Invalid frame %s" % self.path)
-            self._size = min(frame_size * 8, self.parent.size - self.address)
+            if frame_size := self.getFrameSize():
+                self._size = min(frame_size * 8, self.parent.size - self.address)
+            else:
+                raise ParserError(f"MPEG audio: Invalid frame {self.path}")
 
     def createFields(self):
         # Header
@@ -96,8 +96,7 @@ class Frame(FieldSet):
         yield Bit(self, "original", "Is original?")
         yield Enum(Bits(self, "emphasis", 2, "Emphasis"), self.EMPHASIS_NAME)
 
-        size = (self.size - self.current_size) / 8
-        if size:
+        if size := (self.size - self.current_size) / 8:
             yield RawBytes(self, "data", size)
 
     def isValid(self):
@@ -163,14 +162,12 @@ class Frame(FieldSet):
         return self.NB_CHANNEL[ self["channel_mode"].value ]
 
     def createDescription(self):
-        info = ["layer %s" % self["layer"].display]
-        bit_rate = self.getBitRate()
-        if bit_rate:
-            info.append("%s/sec" % humanBitSize(bit_rate))
-        sampling_rate = self.getSampleRate()
-        if sampling_rate:
+        info = [f'layer {self["layer"].display}']
+        if bit_rate := self.getBitRate():
+            info.append(f"{humanBitSize(bit_rate)}/sec")
+        if sampling_rate := self.getSampleRate():
             info.append(humanFrequency(sampling_rate))
-        return "MPEG-%s %s" % (self["version"].display, ", ".join(info))
+        return f'MPEG-{self["version"].display} {", ".join(info)}'
 
 def findSynchronizeBits(parser, start, max_size):
     """
@@ -239,20 +236,12 @@ class Frames(FieldSet):
         return True
 
     def createFields(self):
-        # Find synchronisation bytes
-        padding = self.synchronize()
-        if padding:
+        if padding := self.synchronize():
             yield padding
 
         while self.current_size < self.size:
             yield Frame(self, "frame[]")
-#            padding = self.synchronize()
-#            if padding:
-#                yield padding
-
-        # Read raw bytes at the end (if any)
-        size = (self.size - self.current_size) / 8
-        if size:
+        if size := (self.size - self.current_size) / 8:
             yield RawBytes(self, "raw", size)
 
     def createDescription(self):
@@ -260,7 +249,7 @@ class Frames(FieldSet):
             text = "(looks like) Constant bit rate (CBR)"
         else:
             text = "Variable bit rate (VBR)"
-        return "Frames: %s" % text
+        return f"Frames: {text}"
 
 def createMpegAudioMagic():
 
@@ -309,8 +298,7 @@ class MpegAudioFile(Parser):
                 frame = self["frames/frame[%u]" % index]
             except MissingField:
                 # Require a least one valid frame
-                if (1 <= index) \
-                and self["frames"].done:
+                if index >= 1 and self["frames"].done:
                     return True
                 return "Unable to get frame #%u" % index
             except (InputStreamError, ParserError):
@@ -323,9 +311,8 @@ class MpegAudioFile(Parser):
             # Check that all frames are similar
             if not index:
                 frame0 = frame
-            else:
-                if frame0["channel_mode"].value != frame["channel_mode"].value:
-                    return "Frame #%u channel mode is different" % index
+            elif frame0["channel_mode"].value != frame["channel_mode"].value:
+                return "Frame #%u channel mode is different" % index
         return True
 
     def createFields(self):
@@ -339,7 +326,7 @@ class MpegAudioFile(Parser):
         # Check if file is ending with ID3v1 or not and compute frames size
         frames_size = self.size - self.current_size
         addr = self.size - 128*8
-        if 0 <= addr:
+        if addr >= 0:
             has_id3 = (self.stream.readBytes(addr, 3) == "TAG")
             if has_id3:
                 frames_size -= 128*8
@@ -357,7 +344,7 @@ class MpegAudioFile(Parser):
     def createDescription(self):
         if "frames" in self:
             frame = self["frames/frame[0]"]
-            return "%s, %s" % (frame.description, frame["channel_mode"].display)
+            return f'{frame.description}, {frame["channel_mode"].display}'
         elif "id3v2" in self:
             return self["id3v2"].description
         elif "id3v1" in self:
@@ -375,9 +362,9 @@ class MpegAudioFile(Parser):
                 # File only contains ID3v1 or ID3v2
                 return field.size
 
-            # Error: second field are not the frames"?
-            if field.name != "frames":
-                return None
+        # Error: second field are not the frames"?
+        if field.name != "frames":
+            return None
 
         # Go to last frame
         frames = field

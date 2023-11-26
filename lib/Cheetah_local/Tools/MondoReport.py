@@ -24,10 +24,7 @@ try:
     from Cheetah.NameMapper import valueForKey as lookup_func
 except ImportError:
     def lookup_func(obj, name):
-        if hasattr(obj, name):
-            return getattr(obj, name)
-        else:
-            return obj[name] # Raises KeyError.
+        return getattr(obj, name) if hasattr(obj, name) else obj[name]
 
 ########## PUBLIC GENERIC FUNCTIONS ##############################
 
@@ -48,29 +45,29 @@ def isNotNone(v):
 def Roman(n):
     n = int(n) # Raises TypeError.
     if n < 1:
-        raise ValueError("roman numeral for zero or negative undefined: " + n)
+        raise ValueError(f"roman numeral for zero or negative undefined: {n}")
     roman = ''
     while n >= 1000:
-            n = n - 1000
-            roman = roman + 'M'
+        n -= 1000
+        roman = f'{roman}M'
     while n >= 500:
-            n = n - 500
-            roman = roman + 'D'
+        n -= 500
+        roman = f'{roman}D'
     while n >= 100:
-            n = n - 100
-            roman = roman + 'C'
+        n -= 100
+        roman = f'{roman}C'
     while n >= 50:
-            n = n - 50
-            roman = roman + 'L'
+        n -= 50
+        roman = f'{roman}L'
     while n >= 10:
-            n = n - 10
-            roman = roman + 'X'
+        n -= 10
+        roman = f'{roman}X'
     while n >= 5:
-            n = n - 5
-            roman = roman + 'V'
+        n -= 5
+        roman = f'{roman}V'
     while n < 5 and n >= 1:
-            n = n - 1
-            roman = roman + 'I'
+        n -= 1
+        roman = f'{roman}I'
     roman = roman.replace('DCCCC', 'CM')
     roman = roman.replace('CCCC', 'CD')
     roman = roman.replace('LXXXX', 'XC')
@@ -87,14 +84,11 @@ def mean(lis):
     """Always returns a floating-point number.
     """
     lis_len = len(lis)
-    if lis_len == 0:
-        return 0.00 # Avoid ZeroDivisionError (not raised for floats anyway)
-    total = float( sum(lis) )
-    return total / lis_len
+    return 0.00 if lis_len == 0 else float( sum(lis) ) / lis_len
 
 def median(lis):
     lis = sorted(lis[:])
-    return lis[int(len(lis)/2)]
+    return lis[len(lis) // 2]
 
 
 def variance(lis):
@@ -212,10 +206,7 @@ class RecordStats(IndexFormats, ValuesGetterMixin):
 
     def percentOfTotal(self, field=None, suffix='%', default='N/A', decimals=2):
         rec = self._origList[self._index]
-        if field:
-            val = lookup_func(rec, field)
-        else:
-            val = rec
+        val = lookup_func(rec, field) if field else rec
         try:
             lis = self._getValues(field, isNumeric)
         except NegativeError:
@@ -228,14 +219,8 @@ class RecordStats(IndexFormats, ValuesGetterMixin):
             percent = (val / total) * 100
         except ZeroDivisionError:
             return default
-        if decimals == 0:
-            percent = int(percent)
-        else:
-            percent = round(percent, decimals)
-        if suffix:
-            return str(percent) + suffix # String.
-        else:
-            return percent # Numeric.
+        percent = int(percent) if decimals == 0 else round(percent, decimals)
+        return str(percent) + suffix if suffix else percent
 
     def __call__(self): # Overrides IndexFormats.__call__
         """This instance is not callable, so we override the super method.
@@ -245,18 +230,16 @@ class RecordStats(IndexFormats, ValuesGetterMixin):
     def prev(self):
         if self._index == 0:
             return None
-        else:
-            length = self.length()
-            start = self._index - length
-            return PrevNextPage(self._origList, length, start)
+        length = self.length()
+        start = self._index - length
+        return PrevNextPage(self._origList, length, start)
 
     def next(self):
         if self._index + self.length() == self.length():
             return None
-        else:
-            length = self.length()
-            start = self._index + length
-            return PrevNextPage(self._origList, length, start)
+        length = self.length()
+        start = self._index + length
+        return PrevNextPage(self._origList, length, start)
             
     def prevPages(self):
         raise NotImplementedError()
@@ -276,10 +259,7 @@ class RecordStats(IndexFormats, ValuesGetterMixin):
         """Copied from Zope's DT_InSV.py's "opt" function.
         """
         if size < 1:
-            if start > 0 and end > 0 and end >= start:
-                size=end+1-start
-            else: size=7
-
+            size = end+1-start if start > 0 and end > 0 and end >= start else 7
         if start > 0:
 
             try: sequence[start-1]
@@ -287,7 +267,7 @@ class RecordStats(IndexFormats, ValuesGetterMixin):
             # if start > l: start=l
 
             if end > 0:
-                if end < start: end=start
+                end = max(end, start)
             else:
                 end=start+size-1
                 try: sequence[end+orphan-1]

@@ -13,19 +13,16 @@ import unittest
 class CommandLineTest(unittest.TestCase):
     def createAndCompile(self, source):
         sourcefile = '-'
-        while sourcefile.find('-') != -1:
+        while '-' in sourcefile:
             sourcefile = tempfile.mktemp()
-        
-        fd = open('%s.tmpl' % sourcefile, 'w')
-        fd.write(source)
-        fd.close()
 
+        with open(f'{sourcefile}.tmpl', 'w') as fd:
+            fd.write(source)
         wrap = CheetahWrapper.CheetahWrapper()
         wrap.main(['cheetah', 'compile', '--quiet', '--nobackup', sourcefile])
         module_path, module_name = os.path.split(sourcefile)
         module = loadModule(module_name, [module_path])
-        template = getattr(module, module_name)
-        return template
+        return getattr(module, module_name)
 
 class JBQ_UTF8_Test1(unittest.TestCase):
     def runTest(self):

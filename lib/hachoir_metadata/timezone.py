@@ -29,14 +29,10 @@ class Timezone(TimezoneUTC):
         return self._name
 
     def __repr__(self):
-        return "<Timezone delta=%s, name='%s'>" % (
-            self._offset, self._name)
+        return f"<Timezone delta={self._offset}, name='{self._name}'>"
 
 UTC = TimezoneUTC()
 
 def createTimezone(offset):
-    if offset:
-        return Timezone(offset)
-    else:
-        return UTC
+    return Timezone(offset) if offset else UTC
 

@@ -54,7 +54,7 @@ def get_ranges(headervalue, content_length):
     
     if not headervalue:
         return None
-    
+
     result = []
     bytesunit, byteranges = headervalue.split("=", 1)
     for brange in byteranges.split(","):
@@ -82,13 +82,13 @@ def get_ranges(headervalue, content_length):
                 # response containing the full entity)."
                 return None
             result.append((start, stop + 1))
-        else:
-            if not stop:
-                # See rfc quote above.
-                return None
+        elif stop:
             # Negative subscript (last N bytes)
             result.append((content_length - int(stop), content_length))
-    
+
+        else:
+            # See rfc quote above.
+            return None
     return result
 
 
@@ -105,37 +105,31 @@ class HeaderElement(object):
         return cmp(self.value, other.value)
     
     def __unicode__(self):
-        p = [";%s=%s" % (k, v) for k, v in self.params.iteritems()]
-        return u"%s%s" % (self.value, "".join(p))
+        p = [f";{k}={v}" for k, v in self.params.iteritems()]
+        return f'{self.value}{"".join(p)}'
     
     def __str__(self):
         return str(self.__unicode__())
     
-    def parse(elementstr):
+    def parse(self):
         """Transform 'token;key=val' to ('token', {'key': 'val'})."""
         # Split the element into a value and parameters. The 'value' may
         # be of the form, "token=token", but we don't split that here.
         atoms = [x.strip() for x in elementstr.split(";") if x.strip()]
-        if not atoms:
-            initial_value = ''
-        else:
-            initial_value = atoms.pop(0).strip()
+        initial_value = '' if not atoms else atoms.pop(0).strip()
         params = {}
         for atom in atoms:
             atom = [x.strip() for x in atom.split("=", 1) if x.strip()]
             key = atom.pop(0)
-            if atom:
-                val = atom[0]
-            else:
-                val = ""
+            val = atom[0] if atom else ""
             params[key] = val
         return initial_value, params
     parse = staticmethod(parse)
     
-    def from_str(cls, elementstr):
+    def from_str(self, elementstr):
         """Construct an instance from a string of the form 'token;key=val'."""
-        ival, params = cls.parse(elementstr)
-        return cls(ival, params)
+        ival, params = self.parse(elementstr)
+        return self(ival, params)
     from_str = classmethod(from_str)
 
 
@@ -151,21 +145,16 @@ class AcceptElement(HeaderElement):
     have been the other way around, but it's too late to fix now.
     """
     
-    def from_str(cls, elementstr):
-        qvalue = None
+    def from_str(self, elementstr):
         # The first "q" parameter (if any) separates the initial
         # media-range parameter(s) (if any) from the accept-params.
         atoms = q_separator.split(elementstr, 1)
         media_range = atoms.pop(0).strip()
-        if atoms:
-            # The qvalue for an Accept header can have extensions. The other
-            # headers cannot, but it's easier to parse them as if they did.
-            qvalue = HeaderElement.from_str(atoms[0].strip())
-        
-        media_type, params = cls.parse(media_range)
+        qvalue = HeaderElement.from_str(atoms[0].strip()) if atoms else None
+        media_type, params = self.parse(media_range)
         if qvalue is not None:
             params["q"] = qvalue
-        return cls(media_type, params)
+        return self(media_type, params)
     from_str = classmethod(from_str)
     
     def qvalue(self):
@@ -347,8 +336,8 @@ class CaseInsensitiveDict(dict):
         for k in E.keys():
             self[str(k).title()] = E[k]
     
-    def fromkeys(cls, seq, value=None):
-        newdict = cls()
+    def fromkeys(self, seq, value=None):
+        newdict = self()
         for k in seq:
             newdict[str(k).title()] = value
         return newdict
@@ -408,20 +397,19 @@ class HeaderMap(CaseInsensitiveDict):
         # from character sets other than US-ASCII." and 
         # "Recipients of header field TEXT containing octets 
         # outside the US-ASCII character set may assume that 
-        # they represent ISO-8859-1 characters." 
+        # they represent ISO-8859-1 characters."
         try:
             v = v.encode("ISO-8859-1")
         except UnicodeEncodeError:
-            if self.protocol == (1, 1):
-                # Encode RFC-2047 TEXT 
-                # (e.g. u"\u8200" -> "=?utf-8?b?6IiA?="). 
-                # We do our own here instead of using the email module
-                # because we never want to fold lines--folding has
-                # been deprecated by the HTTP working group.
-                v = b2a_base64(v.encode('utf-8'))
-                v = ('=?utf-8?b?' + v.strip('\n') + '?=')
-            else:
+            if self.protocol != (1, 1):
                 raise
+            # Encode RFC-2047 TEXT 
+            # (e.g. u"\u8200" -> "=?utf-8?b?6IiA?="). 
+            # We do our own here instead of using the email module
+            # because we never want to fold lines--folding has
+            # been deprecated by the HTTP working group.
+            v = b2a_base64(v.encode('utf-8'))
+            v = ('=?utf-8?b?' + v.strip('\n') + '?=')
         return v
 
 class Host(object):

@@ -67,11 +67,11 @@ def test_callable_spec(callable, callable_args, callable_kwargs):
     if args and args[0] == 'self':
         args = args[1:]
 
-    arg_usage = dict([(arg, 0,) for arg in args])
     vararg_usage = 0
     varkw_usage = 0
     extra_kwargs = set()
 
+    arg_usage = dict([(arg, 0,) for arg in args])
     for i, value in enumerate(callable_args):
         try:
             arg_usage[args[i]] += 1
@@ -115,7 +115,7 @@ def test_callable_spec(callable, callable_args, callable_kwargs):
         # arguments it's definitely a 404.
         message = None
         if show_mismatched_params:
-            message = "Missing parameters: %s" % ",".join(missing_args)
+            message = f'Missing parameters: {",".join(missing_args)}'
         raise cherrypy.HTTPError(404, message=message)
 
     # the extra positional arguments come from the path - 404 Not Found
@@ -127,38 +127,24 @@ def test_callable_spec(callable, callable_args, callable_kwargs):
     qs_params = set(callable_kwargs.keys()) - body_params
 
     if multiple_args:
-        if qs_params.intersection(set(multiple_args)):
-            # If any of the multiple parameters came from the query string then
-            # it's a 404 Not Found
-            error = 404
-        else:
-            # Otherwise it's a 400 Bad Request
-            error = 400
-
+        error = 404 if qs_params.intersection(set(multiple_args)) else 400
         message = None
         if show_mismatched_params:
-            message = "Multiple values for parameters: "\
-                    "%s" % ",".join(multiple_args)
+            message = f'Multiple values for parameters: {",".join(multiple_args)}'
         raise cherrypy.HTTPError(error, message=message)
 
     if not varkw and varkw_usage > 0:
 
-        # If there were extra query string parameters, it's a 404 Not Found
-        extra_qs_params = set(qs_params).intersection(extra_kwargs)
-        if extra_qs_params:
+        if extra_qs_params := set(qs_params).intersection(extra_kwargs):
             message = None
             if show_mismatched_params:
-                message = "Unexpected query string "\
-                        "parameters: %s" % ", ".join(extra_qs_params)
+                message = f'Unexpected query string parameters: {", ".join(extra_qs_params)}'
             raise cherrypy.HTTPError(404, message=message)
 
-        # If there were any extra body parameters, it's a 400 Not Found
-        extra_body_params = set(body_params).intersection(extra_kwargs)
-        if extra_body_params:
+        if extra_body_params := set(body_params).intersection(extra_kwargs):
             message = None
             if show_mismatched_params:
-                message = "Unexpected body parameters: "\
-                        "%s" % ", ".join(extra_body_params)
+                message = f'Unexpected body parameters: {", ".join(extra_body_params)}'
             raise cherrypy.HTTPError(400, message=message)
 
 
@@ -252,7 +238,7 @@ class Dispatcher(object):
         app = request.app
         root = app.root
         dispatch_name = self.dispatch_method_name
-        
+
         # Get config for the root object/path.
         curpath = ""
         nodeconf = {}
@@ -261,7 +247,7 @@ class Dispatcher(object):
         if "/" in app.config:
             nodeconf.update(app.config["/"])
         object_trail = [['root', root, nodeconf, curpath]]
-        
+
         node = root
         names = [x for x in path.strip('/').split('/') if x] + ['index']
         iternames = names[:]
@@ -269,13 +255,13 @@ class Dispatcher(object):
             name = iternames[0]
             # map to legal Python identifiers (replace '.' with '_')
             objname = name.replace('.', '_')
-            
+
             nodeconf = {}
             subnode = getattr(node, objname, None)
             if subnode is None:
                 dispatch = getattr(node, dispatch_name, None)
                 if dispatch and callable(dispatch) and not \
-                        getattr(dispatch, 'exposed', False):
+                            getattr(dispatch, 'exposed', False):
                     subnode = dispatch(vpath=iternames)
             name = iternames.pop(0)
             node = subnode
@@ -284,14 +270,14 @@ class Dispatcher(object):
                 # Get _cp_config attached to this node.
                 if hasattr(node, "_cp_config"):
                     nodeconf.update(node._cp_config)
-            
+
             # Mix in values from app.config for this path.
             curpath = "/".join((curpath, name))
             if curpath in app.config:
                 nodeconf.update(app.config[curpath])
-            
+
             object_trail.append([name, node, nodeconf, curpath])
-        
+
         def set_conf():
             """Collapse all object_trail config into cherrypy.request.config."""
             base = cherrypy.config.copy()
@@ -302,7 +288,7 @@ class Dispatcher(object):
                 if 'tools.staticdir.dir' in conf:
                     base['tools.staticdir.section'] = curpath
             return base
-        
+
         # Try successive objects (reverse order)
         num_candidates = len(object_trail) - 1
         for i in range(num_candidates, -1, -1):
@@ -310,7 +296,7 @@ class Dispatcher(object):
             name, candidate, nodeconf, curpath = object_trail[i]
             if candidate is None:
                 continue
-            
+
             # Try a "default" method on the current leaf.
             if hasattr(candidate, "default"):
                 defhandler = candidate.default
@@ -322,25 +308,16 @@ class Dispatcher(object):
                     # See http://www.cherrypy.org/ticket/613
                     request.is_index = path.endswith("/")
                     return defhandler, names[i:-1]
-            
+
             # Uncomment the next line to restrict positional params to "default".
             # if i < num_candidates - 2: continue
-            
+
             # Try the current leaf.
             if getattr(candidate, 'exposed', False):
                 request.config = set_conf()
-                if i == num_candidates:
-                    # We found the extra ".index". Mark request so tools
-                    # can redirect if path_info has no trailing slash.
-                    request.is_index = True
-                else:
-                    # We're not at an 'index' handler. Mark request so tools
-                    # can redirect if path_info has NO trailing slash.
-                    # Note that this also includes handlers which take
-                    # positional parameters (virtual paths).
-                    request.is_index = False
+                request.is_index = i == num_candidates
                 return candidate, names[i:-1]
-        
+
         # We didn't find anything
         request.config = set_conf()
         return None, []
@@ -415,8 +392,7 @@ class RoutesDispatcher(object):
     
     def __call__(self, path_info):
         """Set handler and config for the current request."""
-        func = self.find_handler(path_info)
-        if func:
+        if func := self.find_handler(path_info):
             cherrypy.serving.request.handler = LateParamPageHandler(func)
         else:
             cherrypy.serving.request.handler = cherrypy.NotFound()
@@ -424,9 +400,9 @@ class RoutesDispatcher(object):
     def find_handler(self, path_info):
         """Find the right page handler, and set request.config."""
         import routes
-        
+
         request = cherrypy.serving.request
-        
+
         config = routes.request_config()
         config.mapper = self.mapper
         if hasattr(request, 'wsgi_environ'):
@@ -434,9 +410,9 @@ class RoutesDispatcher(object):
         config.host = request.headers.get('Host', None)
         config.protocol = request.scheme
         config.redirect = self.redirect
-        
+
         result = self.mapper.match(path_info)
-        
+
         config.mapper_dict = result
         params = {}
         if result:
@@ -445,34 +421,31 @@ class RoutesDispatcher(object):
             params.pop('controller', None)
             params.pop('action', None)
         request.params.update(params)
-        
+
         # Get config for the root object/path.
         request.config = base = cherrypy.config.copy()
         curpath = ""
-        
+
         def merge(nodeconf):
             if 'tools.staticdir.dir' in nodeconf:
                 nodeconf['tools.staticdir.section'] = curpath or "/"
             base.update(nodeconf)
-        
+
         app = request.app
         root = app.root
         if hasattr(root, "_cp_config"):
             merge(root._cp_config)
         if "/" in app.config:
             merge(app.config["/"])
-        
+
         # Mix in values from app.config.
         atoms = [x for x in path_info.split("/") if x]
-        if atoms:
-            last = atoms.pop()
-        else:
-            last = None
+        last = atoms.pop() if atoms else None
         for atom in atoms:
             curpath = "/".join((curpath, atom))
             if curpath in app.config:
                 merge(app.config[curpath])
-        
+
         handler = None
         if result:
             controller = result.get('controller', None)
@@ -481,21 +454,21 @@ class RoutesDispatcher(object):
                 # Get config from the controller.
                 if hasattr(controller, "_cp_config"):
                     merge(controller._cp_config)
-            
+
             action = result.get('action', None)
             if action is not None:
                 handler = getattr(controller, action, None)
                 # Get config from the handler 
                 if hasattr(handler, "_cp_config"): 
                     merge(handler._cp_config)
-                    
+
         # Do the last path atom here so it can
         # override the controller's _cp_config.
         if last:
             curpath = "/".join((curpath, last))
             if curpath in app.config:
                 merge(app.config[curpath])
-        
+
         return handler
 
 

@@ -28,10 +28,7 @@ class FakeArray:
 
     def __nonzero__(self):
         "Is the array empty or not?"
-        if self._cache:
-            return True
-        else:
-            return (0 in self)
+        return True if self._cache else (0 in self)
 
     def __len__(self):
         "Number of fields in the array"

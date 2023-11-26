@@ -39,7 +39,7 @@ class TorrentMetadata(RootMetadata):
             value = field.value
             setattr(self, key, value)
         elif field.name == "piece_length":
-            self.comment = "Piece length: %s" % field.display
+            self.comment = f"Piece length: {field.display}"
 
 class TTF_Metadata(RootMetadata):
     NAMEID_TO_ATTR = {
@@ -61,8 +61,10 @@ class TTF_Metadata(RootMetadata):
     def extractHeader(self, header):
         self.creation_date = header["created"].value
         self.last_modification = header["modified"].value
-        self.comment = u"Smallest readable size in pixels: %s pixels" % header["lowest"].value
-        self.comment = u"Font direction: %s" % header["font_dir"].display
+        self.comment = (
+            f'Smallest readable size in pixels: {header["lowest"].value} pixels'
+        )
+        self.comment = f'Font direction: {header["font_dir"].display}'
 
     @fault_tolerant
     def extractNames(self, names):
@@ -115,14 +117,11 @@ class OLE2_Metadata(RootMetadata):
             fieldset._feedAll()
             if "root[0]" in fieldset:
                 self.useRoot(fieldset["root[0]"])
-        doc_summary = self.getField(fieldset, main_document, "doc_summary[0]")
-        if doc_summary:
+        if doc_summary := self.getField(fieldset, main_document, "doc_summary[0]"):
             self.useSummary(doc_summary, True)
-        word_doc = self.getField(fieldset, main_document, "word_doc[0]")
-        if word_doc:
+        if word_doc := self.getField(fieldset, main_document, "word_doc[0]"):
             self.useWordDocument(word_doc)
-        summary = self.getField(fieldset, main_document, "summary[0]")
-        if summary:
+        if summary := self.getField(fieldset, main_document, "summary[0]"):
             self.useSummary(summary, False)
 
     @fault_tolerant
@@ -145,7 +144,7 @@ class OLE2_Metadata(RootMetadata):
             stream = field.getSubIStream()
             field = guessParser(stream)
             if not field:
-                warning("Unable to create the OLE2 parser for %s!" % name)
+                warning(f"Unable to create the OLE2 parser for {name}!")
                 return None
         return field
 
@@ -161,13 +160,13 @@ class OLE2_Metadata(RootMetadata):
 
     @fault_tolerant
     def useWordDocument(self, doc):
-        self.comment = "Encrypted: %s" % doc["fEncrypted"].value
+        self.comment = f'Encrypted: {doc["fEncrypted"].value}'
 
     @fault_tolerant
     def useProperty(self, summary, property, is_doc_summary):
         field = summary.getFieldByAddress(property["offset"].value*8)
         if not field \
-        or "value" not in field:
+            or "value" not in field:
             return
         field = field["value"]
         if not field.hasValue():
@@ -201,14 +200,14 @@ class OLE2_Metadata(RootMetadata):
         if use_prefix:
             prefix = property["id"].display
             if (prefix in ("TotalEditingTime", "LastPrinted")) \
-            and (not field):
+                and (not field):
                 # Ignore null time delta
                 return
-            value = "%s: %s" % (prefix, value)
-        else:
-            if (key == "last_modification") and (not field):
-                # Ignore null timestamp
-                return
+            else:
+                value = f"{prefix}: {value}"
+        elif (key == "last_modification") and (not field):
+            # Ignore null timestamp
+            return
         setattr(self, key, value)
 
 class PcfMetadata(RootMetadata):
@@ -250,9 +249,9 @@ class SwfMetadata(RootMetadata):
     def extract(self, swf):
         self.height = swf["rect/ymax"].value # twips
         self.width = swf["rect/xmax"].value # twips
-        self.format_version = "flash version %s" % swf["version"].value
+        self.format_version = f'flash version {swf["version"].value}'
         self.frame_rate = swf["frame_rate"].value
-        self.comment = "Frame count: %s" % swf["frame_count"].value
+        self.comment = f'Frame count: {swf["frame_count"].value}'
 
 registerExtractor(TorrentFile, TorrentMetadata)
 registerExtractor(TrueTypeFontFile, TTF_Metadata)

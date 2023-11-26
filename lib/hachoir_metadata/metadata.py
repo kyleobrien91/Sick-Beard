@@ -19,11 +19,7 @@ class Metadata(Logger):
         assert isinstance(self.header, unicode)
 
         # Limit to 0.0 .. 1.0
-        if parent:
-            quality = parent.quality
-        else:
-            quality = min(max(0.0, quality), 1.0)
-
+        quality = parent.quality if parent else min(max(0.0, quality), 1.0)
         object.__init__(self)
         object.__setattr__(self, "_Metadata__data", {})
         object.__setattr__(self, "quality", quality)
@@ -53,7 +49,7 @@ class Metadata(Logger):
         try:
             return self.__data[key]
         except LookupError:
-            raise ValueError("Metadata has no value '%s'" % key)
+            raise ValueError(f"Metadata has no value '{key}'")
 
     def getItem(self, key, index):
         try:
@@ -62,7 +58,7 @@ class Metadata(Logger):
             return None
 
     def has(self, key):
-        return 1 <= len(self.getItems(key))
+        return len(self.getItems(key)) >= 1
 
     def get(self, key, default=None, index=0):
         """
@@ -79,7 +75,7 @@ class Metadata(Logger):
         item = self.getItem(key, index)
         if item is None:
             if default is None:
-                raise ValueError("Metadata has no value '%s' (index %s)" % (key, index))
+                raise ValueError(f"Metadata has no value '{key}' (index {index})")
             else:
                 return default
         return item.value
@@ -88,7 +84,7 @@ class Metadata(Logger):
         try:
             data = self.__data[key]
         except LookupError:
-            raise ValueError("Metadata has no value '%s'" % key)
+            raise ValueError(f"Metadata has no value '{key}'")
         return [ item.value for item in data ]
 
     def getText(self, key, default=None, index=0):
@@ -104,10 +100,7 @@ class Metadata(Logger):
         u'Unknown'
         """
         item = self.getItem(key, index)
-        if item is not None:
-            return item.text
-        else:
-            return default
+        return item.text if item is not None else default
 
     def register(self, data):
         assert data.key not in self.__data
@@ -176,29 +169,20 @@ class Metadata(Logger):
             priority = MAX_PRIORITY
         if not title:
             title = self.header
-        text = ["%s:" % title]
+        text = [f"{title}:"]
         for data in sorted(self):
             if priority < data.priority:
                 break
             if not data.values:
                 continue
-            if human:
-                title = data.description
-            else:
-                title = data.key
+            title = data.description if human else data.key
             for item in data.values:
-                if human:
-                    value = item.text
-                else:
-                    value = makeUnicode(item.value)
-                text.append("%s%s: %s" % (line_prefix, title, value))
-        if 1 < len(text):
-            return text
-        else:
-            return None
+                value = item.text if human else makeUnicode(item.value)
+                text.append(f"{line_prefix}{title}: {value}")
+        return text if len(text) > 1 else None
 
     def __nonzero__(self):
-        return any(item for item in self.__data.itervalues())
+        return any(self.__data.itervalues())
 
 class RootMetadata(Metadata):
     def __init__(self, quality=QUALITY_NORMAL):
@@ -232,7 +216,7 @@ class MultipleMetadata(RootMetadata):
         Returns False if the group is skipped, True if it has been added.
         """
         if not metadata:
-            self.warning("Skip empty group %s" % key)
+            self.warning(f"Skip empty group {key}")
             return False
         if key.endswith("[]"):
             key = key[:-2]
@@ -247,23 +231,17 @@ class MultipleMetadata(RootMetadata):
         return True
 
     def exportPlaintext(self, priority=None, human=True, line_prefix=u"- "):
-        common = Metadata.exportPlaintext(self, priority, human, line_prefix)
-        if common:
+        if common := Metadata.exportPlaintext(self, priority, human, line_prefix):
             text = common
         else:
             text = []
         for key, metadata in self.__groups.iteritems():
-            if not human:
-                title = key
-            else:
-                title = None
-            value = metadata.exportPlaintext(priority, human, line_prefix, title=title)
-            if value:
+            title = key if not human else None
+            if value := metadata.exportPlaintext(
+                priority, human, line_prefix, title=title
+            ):
                 text.extend(value)
-        if len(text):
-            return text
-        else:
-            return None
+        return text if len(text) else None
 
 def registerExtractor(parser, extractor):
     assert parser not in extractors

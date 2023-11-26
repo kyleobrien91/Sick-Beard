@@ -207,17 +207,17 @@ def profile(fn=None, skip=0, filename=None, immediate=False, dirs=False,
             profiler_class = AVAILABLE_PROFILERS[p]
             break
     else:
-        raise ValueError('only these profilers are available: %s'
-                             % ', '.join(AVAILABLE_PROFILERS))
+        raise ValueError(
+            f"only these profilers are available: {', '.join(AVAILABLE_PROFILERS)}"
+        )
     fp = profiler_class(fn, skip=skip, filename=filename,
                         immediate=immediate, dirs=dirs,
                         sort=sort, entries=entries)
-    # fp = HotShotFuncProfile(fn, skip=skip, filename=filename, ...)
-         # or HotShotFuncProfile
     # We cannot return fp or fp.__call__ directly as that would break method
     # definitions, instead we need to return a plain function.
     def new_fn(*args, **kw):
         return fp(*args, **kw)
+
     new_fn.__doc__ = fn.__doc__
     new_fn.__name__ = fn.__name__
     new_fn.__dict__ = fn.__dict__
@@ -404,9 +404,9 @@ if hotshot is not None:
             self.fn = fn
             self.filename = filename
             if self.filename:
-                self.logfilename = filename + ".raw"
+                self.logfilename = f"{filename}.raw"
             else:
-                self.logfilename = fn.__name__ + ".prof"
+                self.logfilename = f"{fn.__name__}.prof"
             self.profiler = hotshot.Profile(self.logfilename)
             self.ncalls = 0
             self.skip = skip
@@ -482,7 +482,7 @@ if hotshot is not None:
             current working directory.
             """
             self.fn = fn
-            self.logfilename = fn.__name__ + ".cprof"
+            self.logfilename = f"{fn.__name__}.cprof"
             self.profiler = _hotshot.coverage(self.logfilename)
             self.ncalls = 0
             atexit.register(self.atexit)
@@ -552,7 +552,7 @@ class TraceFuncCoverage:
         current working directory.
         """
         self.fn = fn
-        self.logfilename = fn.__name__ + ".cprof"
+        self.logfilename = f"{fn.__name__}.cprof"
         self.ncalls = 0
         atexit.register(self.atexit)
 
@@ -639,13 +639,19 @@ class FuncSource:
         lineno = self.firstlineno
         for line in self.source:
             counter = self.sourcelines.get(lineno)
-            if counter is None:
+            if (
+                counter is not None
+                and counter == 0
+                and self.blank_rx.match(line)
+                or counter is None
+            ):
                 prefix = ' ' * 7
-            elif counter == 0:
-                if self.blank_rx.match(line):
-                    prefix = ' ' * 7
-                else:
-                    prefix = '>' * 6 + ' '
+            elif (
+                counter is not None
+                and counter == 0
+                and not self.blank_rx.match(line)
+            ):
+                prefix = '>' * 6 + ' '
             else:
                 prefix = '%5d: ' % counter
             lines.append(prefix + line)

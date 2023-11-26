@@ -40,9 +40,7 @@ class RealAudioFile(Parser):
     def validate(self):
         if self["signature"].value != self.MAGIC:
             return "Invalid signature"
-        if self["version"].value not in (3, 4):
-            return "Unknown version"
-        return True
+        return "Unknown version" if self["version"].value not in (3, 4) else True
 
     def createFields(self):
         yield Bytes(self, "signature", 4, r"RealAudio identifier ('.ra\xFD')")
@@ -77,13 +75,13 @@ class RealAudioFile(Parser):
             yield RawBytes(self, "unknown4", 3)
             yield Metadata(self, "metadata")
             audio_size = (self["filesize"].value + 40) - (self["headersize"].value + 16)
-        if 0 < audio_size:
+        if audio_size > 0:
             yield RawBytes(self, "audio_data", audio_size)
 
     def createDescription(self):
-        if (self["version"].value == 3):
-            return "RealAudio v3 file, '%s' codec" % self["FourCC"].value
-        elif (self["version"].value == 4):
+        if self["version"].value == 3:
+            return f"""RealAudio v3 file, '{self["FourCC"].value}' codec"""
+        elif self["version"].value == 4:
             return "RealAudio v4 file, '%s' codec, %s, %u channels" % (
                 self["FourCC"].value, self["sample_rate"].display, self["channels"].value)
         else:

@@ -155,7 +155,7 @@ class PartitionHeader(FieldSet):
         if self.isUsed():
             system = self["system"].display
             size = self["size"].value * BLOCK_SIZE
-            desc += "%s, %s" % (system, humanFilesize(size))
+            desc += f"{system}, {humanFilesize(size)}"
         else:
             desc += "(unused)"
         return desc
@@ -188,9 +188,7 @@ class Partition(FieldSet):
 
         for start, index, header in sorted((hdr["LBA"].value, index, hdr)
                 for index, hdr in enumerate(mbr.headers) if hdr.isUsed()):
-            # Seek to the beginning of the partition
-            padding = self.seekByte(start * BLOCK_SIZE, "padding[]")
-            if padding:
+            if padding := self.seekByte(start * BLOCK_SIZE, "padding[]"):
                 yield padding
 
             # Content of the partition

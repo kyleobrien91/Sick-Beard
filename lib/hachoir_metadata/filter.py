@@ -16,9 +16,7 @@ class Filter:
             return True
         if self.min is not None and value < self.min:
             return False
-        if self.max is not None and self.max < value:
-            return False
-        return True
+        return self.max is None or self.max >= value
 
 class NumberFilter(Filter):
     def __init__(self, min=None, max=None):

@@ -76,13 +76,11 @@ class MkvMetadata(MultipleMetadata):
         self.addGroup("video[]", video, "Video stream")
 
     def getDouble(self, field, parent):
-        float_key = '%s/float' % parent
+        float_key = f'{parent}/float'
         if float_key in field:
             return field[float_key].value
-        double_key = '%s/double' % parent
-        if double_key in field:
-            return field[double_key].value
-        return None
+        double_key = f'{parent}/double'
+        return field[double_key].value if double_key in field else None
 
     def processAudio(self, track):
         audio = Metadata(self)
@@ -173,14 +171,8 @@ class FlvMetadata(MultipleMetadata):
         else:
             meta.compression = audio["codec"].display
         meta.sample_rate = audio.getSampleRate()
-        if audio["is_16bit"].value:
-            meta.bits_per_sample = 16
-        else:
-            meta.bits_per_sample = 8
-        if audio["is_stereo"].value:
-            meta.nb_channel = 2
-        else:
-            meta.nb_channel = 1
+        meta.bits_per_sample = 16 if audio["is_16bit"].value else 8
+        meta.nb_channel = 2 if audio["is_stereo"].value else 1
 
     @fault_tolerant
     def extractVideo(self, video, meta):
@@ -193,22 +185,20 @@ class FlvMetadata(MultipleMetadata):
     @fault_tolerant
     def useAmfEntry(self, entry):
         key = entry["key"].value
-        if key == "duration":
-            self.duration = timedelta(seconds=entry["value"].value)
-        elif key == "creator":
-            self.producer = entry["value"].value
-        elif key == "audiosamplerate":
+        if key == "audiosamplerate":
             self.sample_rate = entry["value"].value
+        elif key in ["creator", "metadatacreator"]:
+            self.producer = entry["value"].value
+        elif key == "duration":
+            self.duration = timedelta(seconds=entry["value"].value)
         elif key == "framerate":
             self.frame_rate = entry["value"].value
-        elif key == "metadatacreator":
-            self.producer = entry["value"].value
+        elif key == "height":
+            self.height = int(entry["value"].value)
         elif key == "metadatadate":
             self.creation_date = entry.value
         elif key == "width":
             self.width = int(entry["value"].value)
-        elif key == "height":
-            self.height = int(entry["value"].value)
 
 class MovMetadata(RootMetadata):
     def extract(self, mov):
@@ -267,7 +257,6 @@ class AsfMetadata(MultipleMetadata):
             self.processHeader(asf["header/content"])
 
     def processHeader(self, header):
-        compression = []
         is_vbr = None
 
         if "ext_desc/content" in header:
@@ -278,7 +267,7 @@ class AsfMetadata(MultipleMetadata):
 
             # Have ToolName and ToolVersion? If yes, group them to producer key
             if "ToolName" in data and "ToolVersion" in data:
-                self.producer = "%s (version %s)" % (data["ToolName"], data["ToolVersion"])
+                self.producer = f'{data["ToolName"]} (version {data["ToolVersion"]})'
                 del data["ToolName"]
                 del data["ToolVersion"]
 
@@ -294,7 +283,7 @@ class AsfMetadata(MultipleMetadata):
                 else:
                     if isinstance(key, str):
                         key = makePrintable(key, "ISO-8859-1", to_unicode=True)
-                    value = "%s=%s" % (key, value)
+                    value = f"{key}={value}"
                     key = "comment"
                 setattr(self, key, value)
 
@@ -302,11 +291,12 @@ class AsfMetadata(MultipleMetadata):
             self.useFileProp(header["file_prop/content"], is_vbr)
 
         if "codec_list/content" in header:
+            compression = []
             for codec in header.array("codec_list/content/codec"):
                 if "name" in codec:
                     text = codec["name"].value
                     if "desc" in codec and codec["desc"].value:
-                        text = "%s (%s)" % (text, codec["desc"].value)
+                        text = f'{text} ({codec["desc"].value})'
                     compression.append(text)
 
         audio_index = 1
@@ -379,11 +369,11 @@ class AsfMetadata(MultipleMetadata):
         value = prop["max_bitrate"].value
         text = prop["max_bitrate"].display
         if is_vbr is True:
-            text = "VBR (%s max)" % text
+            text = f"VBR ({text} max)"
         elif is_vbr is False:
-            text = "%s (CBR)" % text
+            text = f"{text} (CBR)"
         else:
-            text = "%s (max)" % text
+            text = f"{text} (max)"
         self.bit_rate = (value, text)
 
     def streamProperty(self, header, index, meta):

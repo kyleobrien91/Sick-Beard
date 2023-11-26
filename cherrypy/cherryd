@@ -12,34 +12,34 @@ def start(configfiles=None, daemonize=False, environment=None,
     """Subscribe all engine plugins and start the engine."""
     sys.path = [''] + sys.path
     for i in imports or []:
-        exec("import %s" % i)
-    
+        exec(f"import {i}")
+
     for c in configfiles or []:
         cherrypy.config.update(c)
         # If there's only one app mounted, merge config into it.
         if len(cherrypy.tree.apps) == 1:
             for app in cherrypy.tree.apps.values():
                 app.merge(c)
-    
+
     engine = cherrypy.engine
-    
+
     if environment is not None:
         cherrypy.config.update({'environment': environment})
-    
+
     # Only daemonize if asked to.
     if daemonize:
         # Don't print anything to stdout/sterr.
         cherrypy.config.update({'log.screen': False})
         plugins.Daemonizer(engine).subscribe()
-    
+
     if pidfile:
         plugins.PIDFile(engine, pidfile).subscribe()
-    
+
     if hasattr(engine, "signal_handler"):
         engine.signal_handler.subscribe()
     if hasattr(engine, "console_control_handler"):
         engine.console_control_handler.subscribe()
-    
+
     if fastcgi and scgi:
         # fastcgi and scgi aren't allowed together.
         cherrypy.log.error("fastcgi and scgi aren't allowed together.", 'ENGINE')
@@ -49,7 +49,7 @@ def start(configfiles=None, daemonize=False, environment=None,
         cherrypy.config.update({'engine.autoreload_on': False})
         # Turn off the default HTTP server (which is subscribed by default).
         cherrypy.server.unsubscribe()
-        
+
         addr = cherrypy.server.bind_addr
         if fastcgi:
             f = servers.FlupFCGIServer(application=cherrypy.tree,
@@ -59,7 +59,7 @@ def start(configfiles=None, daemonize=False, environment=None,
                                        bindAddress=addr)
         s = servers.ServerAdapter(engine, httpserver=f, bind_addr=addr)
         s.subscribe()
-    
+
     # Always start the engine; this will start all other services
     try:
         engine.start()

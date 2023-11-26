@@ -532,12 +532,12 @@ class Request(object):
         self.stage = 'run'
         try:
             self.error_response = cherrypy.HTTPError(500).set_response
-            
+
             self.method = method
             path = path or "/"
             self.query_string = query_string or ''
             self.params = {}
-            
+
             # Compare request and server HTTP protocol versions, in case our
             # server does not support the requested protocol. Limit our output
             # to min(req, server). We want the following output:
@@ -554,58 +554,54 @@ class Request(object):
             sp = int(self.server_protocol[5]), int(self.server_protocol[7])
             self.protocol = min(rp, sp)
             response.headers.protocol = self.protocol
-            
+
             # Rebuild first line of the request (e.g. "GET /path HTTP/1.0").
             url = path
             if query_string:
-                url += '?' + query_string
-            self.request_line = '%s %s %s' % (method, url, req_protocol)
-            
+                url += f'?{query_string}'
+            self.request_line = f'{method} {url} {req_protocol}'
+
             self.header_list = list(headers)
             self.headers = httputil.HeaderMap()
-            
+
             self.rfile = rfile
             self.body = None
-            
+
             self.cookie = SimpleCookie()
             self.handler = None
-            
+
             # path_info should be the path from the
             # app root (script_name) to the handler.
             self.script_name = self.app.script_name
             self.path_info = pi = path[len(self.script_name):]
-            
+
             self.stage = 'respond'
             self.respond(pi)
-            
+
         except self.throws:
             raise
         except:
             if self.throw_errors:
                 raise
-            else:
-                # Failure in setup, error handler or finalize. Bypass them.
-                # Can't use handle_error because we may not have hooks yet.
-                cherrypy.log(traceback=True, severity=40)
-                if self.show_tracebacks:
-                    body = format_exc()
-                else:
-                    body = ""
-                r = bare_error(body)
-                response.output_status, response.header_list, response.body = r
-        
+            # Failure in setup, error handler or finalize. Bypass them.
+            # Can't use handle_error because we may not have hooks yet.
+            cherrypy.log(traceback=True, severity=40)
+            body = format_exc() if self.show_tracebacks else ""
+            r = bare_error(body)
+            response.output_status, response.header_list, response.body = r
+
         if self.method == "HEAD":
             # HEAD requests MUST NOT return a message-body in the response.
             response.body = []
-        
+
         try:
             cherrypy.log.access()
         except:
             cherrypy.log.error(traceback=True)
-        
+
         if response.timed_out:
             raise cherrypy.TimeoutError()
-        
+
         return response
     
     # Uncomment for stage debugging
@@ -705,7 +701,7 @@ class Request(object):
             # so title doesn't have to be called twice.
             name = name.title()
             value = value.strip()
-            
+
             # Warning: if there is more than one header entry for cookies (AFAIK,
             # only Konqueror does that), only the last one will remain in headers
             # (but they will be correctly stored in request.cookie).
@@ -713,16 +709,16 @@ class Request(object):
                 dict.__setitem__(headers, name, httputil.decode_TEXT(value))
             else:
                 dict.__setitem__(headers, name, value)
-            
+
             # Handle cookies differently because on Konqueror, multiple
             # cookies come on different lines with the same key
             if name == 'Cookie':
                 try:
                     self.cookie.load(value)
                 except CookieError:
-                    msg = "Illegal cookie name %s" % value.split('=')[0]
+                    msg = f"Illegal cookie name {value.split('=')[0]}"
                     raise cherrypy.HTTPError(400, msg)
-        
+
         if not dict.__contains__(headers, 'Host'):
             # All Internet-based HTTP/1.1 servers MUST respond with a 400
             # (Bad Request) status code to any HTTP/1.1 request message
@@ -733,7 +729,7 @@ class Request(object):
         host = dict.get(headers, 'Host')
         if not host:
             host = self.local.name or self.local.ip
-        self.base = "%s://%s" % (self.scheme, host)
+        self.base = f"{self.scheme}://{host}"
     
     def get_resource(self, path):
         """Call a dispatcher (which sets self.handler and .config). (Core)"""
@@ -783,11 +779,7 @@ class ResponseBody(object):
     """The body of the HTTP response (the response entity)."""
     
     def __get__(self, obj, objclass=None):
-        if obj is None:
-            # When calling on the class instead of an instance...
-            return self
-        else:
-            return obj._body
+        return self if obj is None else obj._body
     
     def __set__(self, obj, value):
         # Convert the given value to an iterable object.
@@ -795,11 +787,7 @@ class ResponseBody(object):
             # strings get wrapped in a list because iterating over a single
             # item list is much faster than iterating over every character
             # in a long string.
-            if value:
-                value = [value]
-            else:
-                # [''] doesn't evaluate to False, so replace it with [].
-                value = []
+            value = [value] if value else []
         elif isinstance(value, types.FileType):
             value = file_generator(value)
         elif value is None:
@@ -861,15 +849,18 @@ class Response(object):
         self.header_list = None
         self._body = []
         self.time = time.time()
-        
+
         self.headers = httputil.HeaderMap()
         # Since we know all our keys are titled strings, we can
         # bypass HeaderMap.update and get a big speed boost.
-        dict.update(self.headers, {
-            "Content-Type": 'text/html',
-            "Server": "CherryPy/" + cherrypy.__version__,
-            "Date": httputil.HTTPDate(self.time),
-        })
+        dict.update(
+            self.headers,
+            {
+                "Content-Type": 'text/html',
+                "Server": f"CherryPy/{cherrypy.__version__}",
+                "Date": httputil.HTTPDate(self.time),
+            },
+        )
         self.cookie = SimpleCookie()
     
     def collapse_body(self):
@@ -877,7 +868,7 @@ class Response(object):
         if isinstance(self.body, basestring):
             return self.body
 
-        newbody = ''.join([chunk for chunk in self.body])
+        newbody = ''.join(list(self.body))
         self.body = newbody
         return newbody
     

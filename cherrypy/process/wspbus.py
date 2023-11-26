@@ -87,7 +87,7 @@ class ChannelFailures(Exception):
         # Don't use 'super' here; Exceptions are old-style in Py2.4
         # See http://www.cherrypy.org/ticket/959
         Exception.__init__(self, *args, **kwargs)
-        self._exceptions = list()
+        self._exceptions = []
     
     def handle_exception(self):
         self._exceptions.append(sys.exc_info())
@@ -107,7 +107,7 @@ class _StateEnum(object):
     class State(object):
         name = None
         def __repr__(self):
-            return "states.%s" % self.name
+            return f"states.{self.name}"
     
     def __setattr__(self, key, value):
         if isinstance(value, self.State):
@@ -286,7 +286,7 @@ class Bus(object):
             self.log('SystemExit raised: shutting down bus')
             self.exit()
             raise
-        
+
         # Waiting for ALL child threads to finish is necessary on OS X.
         # See http://www.cherrypy.org/ticket/581.
         # It's also good to let them all shut down before allowing
@@ -296,29 +296,21 @@ class Bus(object):
         for t in threading.enumerate():
             if t != threading.currentThread() and t.isAlive():
                 # Note that any dummy (external) threads are always daemonic.
-                if hasattr(threading.Thread, "daemon"):
-                    # Python 2.6+
-                    d = t.daemon
-                else:
-                    d = t.isDaemon()
+                d = t.daemon if hasattr(threading.Thread, "daemon") else t.isDaemon()
                 if not d:
                     t.join()
-        
+
         if self.execv:
             self._do_execv()
     
     def wait(self, state, interval=0.1, channel=None):
         """Wait for the given state(s)."""
-        if isinstance(state, (tuple, list)):
-            states = state
-        else:
-            states = [state]
-        
+        states = state if isinstance(state, (tuple, list)) else [state]
         def _wait():
             while self.state not in states:
                 time.sleep(interval)
                 self.publish(channel)
-        
+
         # From http://psyco.sourceforge.net/psycoguide/bugs.html:
         # "The compiled machine code does not include the regular polling
         # done by Python, meaning that a KeyboardInterrupt will not be
@@ -329,7 +321,7 @@ class Bus(object):
             sys.modules['psyco'].cannotcompile(_wait)
         except (KeyError, AttributeError):
             pass
-        
+
         _wait()
     
     def _do_execv(self):
@@ -339,10 +331,10 @@ class Bus(object):
         (OS X) don't allow execv to be called in a child thread very well.
         """
         args = sys.argv[:]
-        self.log('Re-spawning %s' % ' '.join(args))
+        self.log(f"Re-spawning {' '.join(args)}")
         args.insert(0, sys.executable)
         if sys.platform == 'win32':
-            args = ['"%s"' % arg for arg in args]
+            args = [f'"{arg}"' for arg in args]
 
         os.chdir(_startup_cwd)
         os.execv(sys.executable, args)
@@ -362,16 +354,17 @@ class Bus(object):
         if kwargs is None:
             kwargs = {}
         args = (func,) + args
-        
+
         def _callback(func, *a, **kw):
             self.wait(states.STARTED)
             func(*a, **kw)
+
         t = threading.Thread(target=_callback, args=args, kwargs=kwargs)
-        t.setName('Bus Callback ' + t.getName())
+        t.setName(f'Bus Callback {t.getName()}')
         t.start()
-        
+
         self.start()
-        
+
         return t
     
     def log(self, msg="", level=20, traceback=False):

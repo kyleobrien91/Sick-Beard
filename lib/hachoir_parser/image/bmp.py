@@ -29,10 +29,9 @@ class ImageLine(FieldSet):
         self._size = alignValue(self._width * self._pixel.static_size, 32)
 
     def createFields(self):
-        for x in xrange(self._width):
+        for _ in xrange(self._width):
             yield self._pixel(self, "pixel[]")
-        size = self.size - self.current_size
-        if size:
+        if size := self.size - self.current_size:
             yield createPaddingField(self, size)
 
 class ImagePixels(FieldSet):
@@ -45,8 +44,7 @@ class ImagePixels(FieldSet):
     def createFields(self):
         for y in xrange(self._height-1, -1, -1):
             yield ImageLine(self, "line[%u]" % y, self._width, self._pixel)
-        size = (self.size - self.current_size) // 8
-        if size:
+        if size := (self.size - self.current_size) // 8:
             yield NullBytes(self, "padding", size)
 
 class CIEXYZ(FieldSet):
@@ -66,9 +64,7 @@ class BmpHeader(FieldSet):
     def getFormatVersion(self):
         if "gamma_blue" in self:
             return 4
-        if "important_color" in self:
-            return 3
-        return 2
+        return 3 if "important_color" in self else 2
 
     def createFields(self):
         # Version 2 (12 bytes)
@@ -105,20 +101,20 @@ class BmpHeader(FieldSet):
 
 def parseImageData(parent, name, size, header):
     if ("compression" not in header) or (header["compression"].value in (0, 3)):
-        width = header["width"].value
-        height = header["height"].value
         bpp = header["bpp"].value
-        if bpp == 32:
-            cls = UInt32
-        elif bpp == 24:
+        if bpp == 24:
             cls = RGB
-        elif bpp == 8:
-            cls = UInt8
+        elif bpp == 32:
+            cls = UInt32
         elif bpp == 4:
             cls = Pixel4bit
+        elif bpp == 8:
+            cls = UInt8
         else:
             cls = None
         if cls:
+            width = header["width"].value
+            height = header["height"].value
             return ImagePixels(parent, name, width, height, cls, size=size*8)
     return RawBytes(parent, name, size)
 
@@ -151,7 +147,7 @@ class BmpFile(Parser):
         if self.stream.readBytes(0, 2) != 'BM':
             return "Wrong file signature"
         if self["header/header_size"].value not in (12, 40, 108):
-            return "Unknown header size (%s)" % self["header_size"].value
+            return f'Unknown header size ({self["header_size"].value})'
         if self["header/nb_plan"].value != 1:
             return "Invalid number of planes"
         return True
@@ -178,9 +174,7 @@ class BmpFile(Parser):
         if nb_color:
             yield PaletteRGBA(self, "palette", nb_color)
 
-        # Seek to data start
-        field = self.seekByte(self["data_start"].value)
-        if field:
+        if field := self.seekByte(self["data_start"].value):
             yield field
 
         # Image pixels
@@ -188,7 +182,7 @@ class BmpFile(Parser):
         yield parseImageData(self, "pixels", size, header)
 
     def createDescription(self):
-        return u"Microsoft Bitmap version %s" % self["header"].getFormatVersion()
+        return f'Microsoft Bitmap version {self["header"].getFormatVersion()}'
 
     def createContentSize(self):
         return self["file_size"].value * 8

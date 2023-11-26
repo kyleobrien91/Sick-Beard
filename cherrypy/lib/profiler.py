@@ -127,7 +127,7 @@ class Profiler(object):
         runs = self.statfiles()
         runs.sort()
         for i in runs:
-            yield "<a href='report?filename=%s' target='main'>%s</a><br />" % (i, i)
+            yield f"<a href='report?filename={i}' target='main'>{i}</a><br />"
     menu.exposed = True
     
     def report(self, filename):
@@ -168,13 +168,10 @@ class make_app:
                    "If you're on Debian, try `sudo apt-get install python-profiler`. "
                    "See http://www.cherrypy.org/wiki/ProfilingOnDebian for details.")
             warnings.warn(msg)
-        
+
         self.nextapp = nextapp
         self.aggregate = aggregate
-        if aggregate:
-            self.profiler = ProfileAggregator(path)
-        else:
-            self.profiler = Profiler(path)
+        self.profiler = ProfileAggregator(path) if aggregate else Profiler(path)
     
     def __call__(self, environ, start_response):
         def gather():

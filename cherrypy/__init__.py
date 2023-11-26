@@ -68,7 +68,7 @@ class _AttributeDocstrings(type):
     # The full docstring for this type is down in the __init__ method so
     # that it doesn't show up in help() for every consumer class.
     
-    def __init__(cls, name, bases, dct):
+    def __init__(self, name, bases, dct):
         '''Metaclass for declaring docstrings for class attributes.
         
         Base Python doesn't provide any syntax for setting docstrings on
@@ -125,32 +125,31 @@ class _AttributeDocstrings(type):
         that's not How Python Works. Quack.
         '''
         
-        newdoc = [cls.__doc__ or ""]
-        
+        newdoc = [self.__doc__ or ""]
+
         dctkeys = dct.keys()
         dctkeys.sort()
         for name in dctkeys:
             if name.endswith("__doc"):
                 # Remove the magic doc attribute.
-                if hasattr(cls, name):
-                    delattr(cls, name)
-                
+                if hasattr(self, name):
+                    delattr(self, name)
+
                 # Make a uniformly-indented docstring from it.
-                val = '\n'.join(['    ' + line.strip()
-                                 for line in dct[name].split('\n')])
-                
+                val = '\n'.join([f'    {line.strip()}' for line in dct[name].split('\n')])
+
                 # Get the default value.
                 attrname = name[:-5]
                 try:
-                    attrval = getattr(cls, attrname)
+                    attrval = getattr(self, attrname)
                 except AttributeError:
                     attrval = "missing"
-                
+
                 # Add the complete attribute docstring to our list.
                 newdoc.append("%s [= %r]:\n%s" % (attrname, attrval, val))
-        
+
         # Add our list of new docstrings to the class docstring.
-        cls.__doc__ = "\n\n".join(newdoc)
+        self.__doc__ = "\n\n".join(newdoc)
 
 
 from cherrypy._cperror import HTTPError, HTTPRedirect, InternalRedirect
@@ -475,8 +474,8 @@ def url(path="", qs="", script_name=None, base=None, relative=None):
     if isinstance(qs, (tuple, list, dict)):
         qs = _urlencode(qs)
     if qs:
-        qs = '?' + qs
-    
+        qs = f'?{qs}'
+
     if request.app:
         if not path.startswith("/"):
             # Append/remove trailing slash from path_info as needed
@@ -485,21 +484,17 @@ def url(path="", qs="", script_name=None, base=None, relative=None):
             pi = request.path_info
             if request.is_index is True:
                 if not pi.endswith('/'):
-                    pi = pi + '/'
+                    pi = f'{pi}/'
             elif request.is_index is False:
                 if pi.endswith('/') and pi != '/':
                     pi = pi[:-1]
-            
-            if path == "":
-                path = pi
-            else:
-                path = _urljoin(pi, path)
-        
+
+            path = pi if path == "" else _urljoin(pi, path)
         if script_name is None:
             script_name = request.script_name
         if base is None:
             base = request.base
-        
+
         newurl = base + script_name + path + qs
     else:
         # No request.app (we're being called outside a request).
@@ -508,10 +503,10 @@ def url(path="", qs="", script_name=None, base=None, relative=None):
         # if you're using vhosts or tools.proxy.
         if base is None:
             base = server.base()
-        
+
         path = (script_name or "") + path
         newurl = base + path + qs
-    
+
     if './' in newurl:
         # Normalize the URL by removing ./ and ../
         atoms = []
@@ -523,12 +518,12 @@ def url(path="", qs="", script_name=None, base=None, relative=None):
             else:
                 atoms.append(atom)
         newurl = '/'.join(atoms)
-    
+
     # At this point, we should have a fully-qualified absolute URL.
-    
+
     if relative is None:
         relative = getattr(request.app, "relative_urls", False)
-    
+
     # See http://www.ietf.org/rfc/rfc2396.txt
     if relative == 'server':
         # "A relative reference beginning with a single slash character is
@@ -548,7 +543,7 @@ def url(path="", qs="", script_name=None, base=None, relative=None):
             new.pop(0)
         new = (['..'] * len(old)) + new
         newurl = '/'.join(new)
-    
+
     return newurl
 
 

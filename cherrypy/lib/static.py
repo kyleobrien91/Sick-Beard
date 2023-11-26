@@ -30,58 +30,55 @@ def serve_file(path, content_type=None, disposition=None, name=None, debug=False
     """
     
     response = cherrypy.serving.response
-    
+
     # If path is relative, users should fix it by making path absolute.
     # That is, CherryPy should not guess where the application root is.
     # It certainly should *not* use cwd (since CP may be invoked from a
     # variety of paths). If using tools.staticdir, you can make your relative
     # paths become absolute by supplying a value for "tools.staticdir.root".
     if not os.path.isabs(path):
-        msg = "'%s' is not an absolute path." % path
+        msg = f"'{path}' is not an absolute path."
         if debug:
             cherrypy.log(msg, 'TOOLS.STATICFILE')
         raise ValueError(msg)
-    
+
     try:
         st = os.stat(path)
     except OSError:
         if debug:
             cherrypy.log('os.stat(%r) failed' % path, 'TOOLS.STATIC')
         raise cherrypy.NotFound()
-    
+
     # Check if path is a directory.
     if stat.S_ISDIR(st.st_mode):
         # Let the caller deal with it as they like.
         if debug:
             cherrypy.log('%r is a directory' % path, 'TOOLS.STATIC')
         raise cherrypy.NotFound()
-    
+
     # Set the Last-Modified response header, so that
     # modified-since validation code can work.
     response.headers['Last-Modified'] = httputil.HTTPDate(st.st_mtime)
     cptools.validate_since()
-    
+
     if content_type is None:
-        # Set content-type based on filename extension
-        ext = ""
         i = path.rfind('.')
-        if i != -1:
-            ext = path[i:].lower()
+        ext = path[i:].lower() if i != -1 else ""
         content_type = mimetypes.types_map.get(ext, None)
     if content_type is not None:
         response.headers['Content-Type'] = content_type
     if debug:
         cherrypy.log('Content-Type: %r' % content_type, 'TOOLS.STATIC')
-    
+
     cd = None
     if disposition is not None:
         if name is None:
             name = os.path.basename(path)
-        cd = '%s; filename="%s"' % (disposition, name)
+        cd = f'{disposition}; filename="{name}"'
         response.headers["Content-Disposition"] = cd
     if debug:
         cherrypy.log('Content-Disposition: %r' % cd, 'TOOLS.STATIC')
-    
+
     # Set Content-Length and use an iterable (file object)
     #   this way CP won't load the whole file in memory
     content_length = st.st_size
@@ -108,7 +105,7 @@ def serve_fileobj(fileobj, content_type=None, disposition=None, name=None,
     """
     
     response = cherrypy.serving.response
-    
+
     try:
         st = os.fstat(fileobj.fileno())
     except AttributeError:
@@ -121,40 +118,37 @@ def serve_fileobj(fileobj, content_type=None, disposition=None, name=None,
         response.headers['Last-Modified'] = httputil.HTTPDate(st.st_mtime)
         cptools.validate_since()
         content_length = st.st_size
-    
+
     if content_type is not None:
         response.headers['Content-Type'] = content_type
     if debug:
         cherrypy.log('Content-Type: %r' % content_type, 'TOOLS.STATIC')
-    
+
     cd = None
     if disposition is not None:
-        if name is None:
-            cd = disposition
-        else:
-            cd = '%s; filename="%s"' % (disposition, name)
+        cd = disposition if name is None else f'{disposition}; filename="{name}"'
         response.headers["Content-Disposition"] = cd
     if debug:
         cherrypy.log('Content-Disposition: %r' % cd, 'TOOLS.STATIC')
-    
+
     return _serve_fileobj(fileobj, content_type, content_length, debug=debug)
 
 def _serve_fileobj(fileobj, content_type, content_length, debug=False):
     """Internal. Set response.body to the given file object, perhaps ranged."""
     response = cherrypy.serving.response
-    
+
     # HTTP/1.0 didn't have Range/Accept-Ranges headers, or the 206 code
     request = cherrypy.serving.request
     if request.protocol >= (1, 1):
         response.headers["Accept-Ranges"] = "bytes"
         r = httputil.get_ranges(request.headers.get('Range'), content_length)
         if r == []:
-            response.headers['Content-Range'] = "bytes */%s" % content_length
+            response.headers['Content-Range'] = f"bytes */{content_length}"
             message = "Invalid Range (first-byte-pos greater than Content-Length)"
             if debug:
                 cherrypy.log(message, 'TOOLS.STATIC')
             raise cherrypy.HTTPError(416, message)
-        
+
         if r:
             if len(r) == 1:
                 # Return a single-part response.
@@ -166,8 +160,9 @@ def _serve_fileobj(fileobj, content_type, content_length, debug=False):
                     cherrypy.log('Single part; start: %r, stop: %r' % (start, stop),
                                  'TOOLS.STATIC')
                 response.status = "206 Partial Content"
-                response.headers['Content-Range'] = (
-                    "bytes %s-%s/%s" % (start, stop - 1, content_length))
+                response.headers[
+                    'Content-Range'
+                ] = f"bytes {start}-{stop - 1}/{content_length}"
                 response.headers['Content-Length'] = r_len
                 fileobj.seek(start)
                 response.body = file_generator_limited(fileobj, r_len)
@@ -176,39 +171,39 @@ def _serve_fileobj(fileobj, content_type, content_length, debug=False):
                 response.status = "206 Partial Content"
                 import mimetools
                 boundary = mimetools.choose_boundary()
-                ct = "multipart/byteranges; boundary=%s" % boundary
+                ct = f"multipart/byteranges; boundary={boundary}"
                 response.headers['Content-Type'] = ct
                 if "Content-Length" in response.headers:
                     # Delete Content-Length header so finalize() recalcs it.
                     del response.headers["Content-Length"]
-                
+
                 def file_ranges():
                     # Apache compatibility:
                     yield "\r\n"
-                    
+
                     for start, stop in r:
                         if debug:
                             cherrypy.log('Multipart; start: %r, stop: %r' % (start, stop),
                                          'TOOLS.STATIC')
-                        yield "--" + boundary
+                        yield f"--{boundary}"
                         yield "\r\nContent-type: %s" % content_type
                         yield ("\r\nContent-range: bytes %s-%s/%s\r\n\r\n"
                                % (start, stop - 1, content_length))
                         fileobj.seek(start)
-                        for chunk in file_generator_limited(fileobj, stop - start):
-                            yield chunk
+                        yield from file_generator_limited(fileobj, stop - start)
                         yield "\r\n"
                     # Final boundary
-                    yield "--" + boundary + "--"
-                    
+                    yield f"--{boundary}--"
+
                     # Apache compatibility:
                     yield "\r\n"
+
                 response.body = file_ranges()
             return response.body
         else:
             if debug:
                 cherrypy.log('No byteranges requested', 'TOOLS.STATIC')
-    
+
     # Set Content-Length and use an iterable (file object)
     #   this way CP won't load the whole file in memory
     response.headers['Content-Length'] = content_length
@@ -327,20 +322,20 @@ def staticfile(filename, root=None, match="", content_types=None, debug=False):
         if debug:
             cherrypy.log('request.method not GET or HEAD', 'TOOLS.STATICFILE')
         return False
-    
+
     if match and not re.search(match, request.path_info):
         if debug:
             cherrypy.log('request.path_info %r does not match pattern %r' % 
                          (request.path_info, match), 'TOOLS.STATICFILE')
         return False
-    
+
     # If filename is relative, make absolute using "root".
     if not os.path.isabs(filename):
         if not root:
-            msg = "Static tool requires an absolute filename (got '%s')." % filename
+            msg = f"Static tool requires an absolute filename (got '{filename}')."
             if debug:
                 cherrypy.log(msg, 'TOOLS.STATICFILE')
             raise ValueError(msg)
         filename = os.path.join(root, filename)
-    
+
     return _attempt(filename, content_types, debug=debug)

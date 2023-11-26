@@ -20,8 +20,13 @@ class ISO9660_Metadata(RootMetadata):
         if value.startswith("0000"):
             return
         value = datetime(
-            int(value[0:4]), int(value[4:6]), int(value[6:8]),
-            int(value[8:10]), int(value[10:12]), int(value[12:14]))
+            int(value[:4]),
+            int(value[4:6]),
+            int(value[6:8]),
+            int(value[8:10]),
+            int(value[10:12]),
+            int(value[12:14]),
+        )
         setattr(self, key, value)
 
 registerExtractor(ISO9660, ISO9660_Metadata)

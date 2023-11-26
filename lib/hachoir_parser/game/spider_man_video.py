@@ -32,16 +32,15 @@ class Chunk(FieldSet):
             self._name, self._parser, self._description = self.tag_info[fourcc]
         else:
             self._parser = None
-            self._description = "Unknown chunk: fourcc %s" % self["fourcc"].display
+            self._description = f'Unknown chunk: fourcc {self["fourcc"].display}'
 
     def createFields(self):
         yield String(self, "fourcc", 4, "FourCC", charset="ASCII")
         yield textHandler(UInt32(self, "length", "length"), hexadecimal)
         size = self["length"].value - 8
-        if 0 < size:
+        if size > 0:
             if self._parser:
-                for field in self._parser(self, size):
-                    yield field
+                yield from self._parser(self, size)
             else:
                 yield RawBytes(self, "data", size)
 

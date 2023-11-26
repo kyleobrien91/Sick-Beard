@@ -56,10 +56,10 @@ class HTTPRedirect(CherryPyException):
     def __init__(self, urls, status=None):
         import cherrypy
         request = cherrypy.serving.request
-        
+
         if isinstance(urls, basestring):
             urls = [urls]
-        
+
         abs_urls = []
         for url in urls:
             # Note that urljoin will "do the right thing" whether url is:
@@ -70,20 +70,17 @@ class HTTPRedirect(CherryPyException):
             url = _urljoin(cherrypy.url(), url)
             abs_urls.append(url)
         self.urls = abs_urls
-        
+
         # RFC 2616 indicates a 301 response code fits our goal; however,
         # browser support for 301 is quite messy. Do 302/303 instead. See
         # http://www.alanflavell.org.uk/www/post-redirect.html
         if status is None:
-            if request.protocol >= (1, 1):
-                status = 303
-            else:
-                status = 302
+            status = 303 if request.protocol >= (1, 1) else 302
         else:
             status = int(status)
             if status < 300 or status > 399:
                 raise ValueError("status must be between 300 and 399.")
-        
+
         self.status = status
         CherryPyException.__init__(self, abs_urls, status)
     
@@ -96,13 +93,13 @@ class HTTPRedirect(CherryPyException):
         import cherrypy
         response = cherrypy.serving.response
         response.status = status = self.status
-        
+
         if status in (300, 301, 302, 303, 307):
             response.headers['Content-Type'] = "text/html;charset=utf-8"
             # "The ... URI SHOULD be given by the Location field
             # in the response."
             response.headers['Location'] = self.urls[0]
-            
+
             # "Unless the request method was HEAD, the entity of the response
             # SHOULD contain a short hypertext note with a hyperlink to the
             # new URI(s)."
@@ -122,7 +119,7 @@ class HTTPRedirect(CherryPyException):
             # "The response MUST include the following header fields:
             # Date, unless its omission is required by section 14.18.1"
             # The "Date" header should have been set in Response.__init__
-            
+
             # "...the response SHOULD NOT include other entity-headers."
             for key in ('Allow', 'Content-Encoding', 'Content-Language',
                         'Content-Length', 'Content-Location', 'Content-MD5',
@@ -130,7 +127,7 @@ class HTTPRedirect(CherryPyException):
                         'Last-Modified'):
                 if key in response.headers:
                     del response.headers[key]
-            
+
             # "The 304 response MUST NOT contain a message-body."
             response.body = None
             # Previous code may have set C-L, so we have to reset it.
@@ -143,7 +140,7 @@ class HTTPRedirect(CherryPyException):
             # Previous code may have set C-L, so we have to reset it.
             response.headers.pop('Content-Length', None)
         else:
-            raise ValueError("The %s status code is unknown." % status)
+            raise ValueError(f"The {status} status code is unknown.")
     
     def __call__(self):
         """Use this exception as a request.handler (raise self)."""
@@ -206,24 +203,22 @@ class HTTPError(CherryPyException):
         HTTPError object and set its output without *raising* the exception.
         """
         import cherrypy
-        
+
         response = cherrypy.serving.response
-        
+
         clean_headers(self.code)
-        
+
         # In all cases, finalize will be called after this method,
         # so don't bother cleaning up response values here.
         response.status = self.status
-        tb = None
-        if cherrypy.serving.request.show_tracebacks:
-            tb = format_exc()
+        tb = format_exc() if cherrypy.serving.request.show_tracebacks else None
         response.headers['Content-Type'] = "text/html;charset=utf-8"
         response.headers.pop('Content-Length', None)
-        
+
         content = self.get_error_page(self.status, traceback=tb,
                                       message=self._message)
         response.body = content
-        
+
         _be_ie_unfriendly(self.code)
     
     def get_error_page(self, *args, **kwargs):
@@ -243,7 +238,7 @@ class NotFound(HTTPError):
             request = cherrypy.serving.request
             path = request.script_name + request.path_info
         self.args = (path,)
-        HTTPError.__init__(self, 404, "The path '%s' was not found." % path)
+        HTTPError.__init__(self, 404, f"The path '{path}' was not found.")
 
 
 _HTTPErrorTemplate = '''<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
@@ -335,14 +330,8 @@ _ie_friendly_error_sizes = {
 def _be_ie_unfriendly(status):
     import cherrypy
     response = cherrypy.serving.response
-    
-    # For some statuses, Internet Explorer 5+ shows "friendly error
-    # messages" instead of our response.body if the body is smaller
-    # than a given size. Fix this by returning a body over that size
-    # (by adding whitespace).
-    # See http://support.microsoft.com/kb/q218155/
-    s = _ie_friendly_error_sizes.get(status, 0)
-    if s:
+
+    if s := _ie_friendly_error_sizes.get(status, 0):
         s += 1
         # Since we are issuing an HTTP error status, we assume that
         # the entity is short, and we should just collapse it.

@@ -63,11 +63,11 @@ class ASNInteger(Field):
         stream = self._parent.stream
         addr = self.absolute_address
         value = stream.readBits(addr, 8, BIG_ENDIAN)
-        if 128 <= value:
+        if value >= 128:
             nbits = (value & 127) * 8
             if not nbits:
                 raise ParserError("ASN.1: invalid ASN integer size (zero)")
-            if 64 < nbits:
+            if nbits > 64:
                 # Arbitrary limit to catch errors
                 raise ParserError("ASN.1: ASN integer is limited to 64 bits")
             self._size = 8 + nbits
@@ -83,10 +83,10 @@ class OID_Integer(Bits):
         value = 0
         byte = stream.readBits(addr, 8, BIG_ENDIAN)
         value = byte & 127
-        while 128 <= byte:
+        while byte >= 128:
             addr += 8
             size += 8
-            if 64 < size:
+            if size > 64:
                 # Arbitrary limit to catch errors
                 raise ParserError("ASN.1: Object identifier is limited 64 bits")
             byte = stream.readBits(addr, 8, BIG_ENDIAN)
@@ -131,7 +131,9 @@ def readObjectID(self, content_size):
 
 def readBoolean(self, content_size):
     if content_size != 1:
-        raise ParserError("Overlong boolean: got %s bytes, expected 1 byte"%content_size)
+        raise ParserError(
+            f"Overlong boolean: got {content_size} bytes, expected 1 byte"
+        )
     yield textHandler(UInt8(self, "value"), lambda field:str(bool(field.value)))
 
 def readInteger(self, content_size):
@@ -150,11 +152,8 @@ def formatValue(fieldset):
 def formatUTCTime(fieldset):
     import datetime
     value = fieldset["value"].value
-    year = int(value[0:2])
-    if year < 50:
-        year += 2000
-    else:
-        year += 1900
+    year = int(value[:2])
+    year += 2000 if year < 50 else 1900
     month = int(value[2:4])
     day = int(value[4:6])
     hour = int(value[6:8])
@@ -223,7 +222,9 @@ class Object(FieldSet):
             if key in self.TYPE_INFO:
                 self._name, self._handler, self._description, create_desc = self.TYPE_INFO[key]
                 if create_desc:
-                    self.createDescription = lambda: "%s: %s" % (self.TYPE_INFO[key][2], create_desc(self))
+                    self.createDescription = (
+                        lambda: f"{self.TYPE_INFO[key][2]}: {create_desc(self)}"
+                    )
                     self._description = None
             elif key == 31:
                 raise ParserError("ASN.1 Object: tag bigger than 30 are not supported")
@@ -250,11 +251,9 @@ class Object(FieldSet):
         else:
             yield Bits(self, "type", 5)
         yield ASNInteger(self, "size", "Size in bytes")
-        size = self["size"].value
-        if size:
+        if size := self["size"].value:
             if self._handler:
-                for field in self._handler(self, size):
-                    yield field
+                yield from self._handler(self, size)
             else:
                 yield RawBytes(self, "raw", size)
 
@@ -273,9 +272,7 @@ class ASN1File(Parser):
             root = self[0]
         except (InputStreamError, FieldError):
             return "Unable to create root object"
-        if root.size != self.size:
-            return "Invalid root object size"
-        return True
+        return "Invalid root object size" if root.size != self.size else True
 
     def createFields(self):
         yield Object(self, "root")

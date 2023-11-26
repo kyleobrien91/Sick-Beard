@@ -93,11 +93,8 @@ class IPTC_Chunk(FieldSet):
         yield IPTC_Size(self, "size", "Content size")
 
         size = self["size"].value
-        if 0 < size:
-            if self.dataset_info:
-                cls = self.dataset_info[2]
-            else:
-                cls = None
+        if size > 0:
+            cls = self.dataset_info[2] if self.dataset_info else None
             if cls:
                 yield cls(self, "content")
             else:
@@ -105,9 +102,9 @@ class IPTC_Chunk(FieldSet):
 
 class IPTC(FieldSet):
     def createFields(self):
-        while 5 <= (self._size - self.current_size)/8:
+        while self._size - self.current_size >= 40:
             yield IPTC_Chunk(self, "chunk[]")
         size = (self._size - self.current_size) / 8
-        if 0 < size:
+        if size > 0:
             yield NullBytes(self, "padding", size)
 

@@ -145,8 +145,7 @@ class InputStream(Logger):
                 raise NullStreamError(self.source)
             if self._set_size:
                 for client in self._set_size:
-                    client = client()
-                    if client:
+                    if client := client():
                         client._setSize(self._size)
                 del self._set_size
 
@@ -341,7 +340,7 @@ class InputPipe(object):
 
     def read(self, size):
         end = self.address + size
-        for i in xrange(len(self.buffers), (end >> self.buffer_size) + 1):
+        for _ in xrange(len(self.buffers), (end >> self.buffer_size) + 1):
             data = self._input.read(1 << self.buffer_size)
             if len(data) < 1 << self.buffer_size:
                 self.size = (len(self.buffers) << self.buffer_size) + len(data)
@@ -438,7 +437,7 @@ class InputSubStream(InputStream):
         self.stream = stream
         self._offset = offset
         if source is None:
-            source = "<substream input=%s offset=%s size=%s>" % (stream.source, offset, size)
+            source = f"<substream input={stream.source} offset={offset} size={size}>"
         InputStream.__init__(self, source=source, size=size, **args)
         self.stream.askSize(self)
 
@@ -462,39 +461,39 @@ class FragmentedStream(InputStream):
         data = field.getData()
         self.fragments = [ (0, data.absolute_address, data.size) ]
         self.next = field.next
-        args.setdefault("source", "%s%s" % (self.stream.source, field.path))
+        args.setdefault("source", f"{self.stream.source}{field.path}")
         InputStream.__init__(self, **args)
         if not self.next:
             self._current_size = data.size
             self._setSize()
 
     def _feed(self, end):
-        if self._current_size < end:
-            if self.checked:
-                raise ReadStreamError(end - self._size, self._size)
-            a, fa, fs = self.fragments[-1]
-            while self.stream.sizeGe(fa + min(fs, end - a)):
-                a += fs
-                f = self.next
-                if a >= end:
-                    self._current_size = end
-                    if a == end and not f:
-                        self._setSize()
-                    return False
-                if f:
-                    self.next = f.next
-                    f = f.getData()
-                if not f:
-                    self._current_size = a
+        if self._current_size >= end:
+            return False
+        if self.checked:
+            raise ReadStreamError(end - self._size, self._size)
+        a, fa, fs = self.fragments[-1]
+        while self.stream.sizeGe(fa + min(fs, end - a)):
+            a += fs
+            f = self.next
+            if a >= end:
+                self._current_size = end
+                if a == end and not f:
                     self._setSize()
-                    return True
-                fa = f.absolute_address
-                fs = f.size
-                self.fragments += [ (a, fa, fs) ]
-            self._current_size = a + max(0, self.stream.size - fa)
-            self._setSize()
-            return True
-        return False
+                return False
+            if f:
+                self.next = f.next
+                f = f.getData()
+            if not f:
+                self._current_size = a
+                self._setSize()
+                return True
+            fa = f.absolute_address
+            fs = f.size
+            self.fragments += [ (a, fa, fs) ]
+        self._current_size = a + max(0, self.stream.size - fa)
+        self._setSize()
+        return True
 
     def read(self, address, size):
         assert size > 0

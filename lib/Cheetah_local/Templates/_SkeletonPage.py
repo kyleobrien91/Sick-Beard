@@ -76,32 +76,29 @@ class _SkeletonPage(Template):
         self._stylesheetsOrder, to ensure that the style rules are defined in
         the correct order."""
         
-        stylesheetTagsTxt = ''
-        for title, src in self._stylesheetLibs.items():
-            stylesheetTagsTxt += '<link rel="stylesheet" type="text/css" href="' + str(src) + '" />\n'
-
+        stylesheetTagsTxt = ''.join(
+            f'<link rel="stylesheet" type="text/css" href="{str(src)}' + '" />\n'
+            for title, src in self._stylesheetLibs.items()
+        )
         if not self._stylesheetsOrder:
             return stylesheetTagsTxt
-        
+
         stylesheetTagsTxt += '<style type="text/css"><!--\n'
         for identifier in self._stylesheetsOrder:
             if identifier not in self._stylesheets:
-                warning = '# the identifier ' + identifier + \
-                          'was in stylesheetsOrder, but not in stylesheets'
+                warning = f'# the identifier {identifier}was in stylesheetsOrder, but not in stylesheets'
                 print(warning)
                 stylesheetTagsTxt += warning
                 continue
-                    
+
             attribsDict = self._stylesheets[identifier]
             cssCode = ''
-            attribCode = ''
-            for k, v in attribsDict.items():
-                attribCode += str(k) + ': ' + str(v) + '; '
+            attribCode = ''.join(f'{str(k)}: {str(v)}; ' for k, v in attribsDict.items())
             attribCode = attribCode[:-2] # get rid of the last semicolon
-                
+
             cssCode = '\n' + identifier + ' {' +  attribCode + '}'
             stylesheetTagsTxt += cssCode
-            
+
         stylesheetTagsTxt += '\n//--></style>\n'
 
         return stylesheetTagsTxt
@@ -139,14 +136,14 @@ class _SkeletonPage(Template):
 
 
     def imgTag(self, src, alt='', width=None, height=None, border=0):
-        
+
         """Dynamically generate an image tag.  Cheetah will try to convert the
         src argument to a WebKit serverSidePath relative to the servlet's
         location. If width and height aren't specified they are calculated using
         PIL or ImageMagick if available."""
         
         src = self.normalizePath(src)
-        
+
 
         if not width or not height:
             try:                    # see if the dimensions can be calc'd with PIL
@@ -158,15 +155,18 @@ class _SkeletonPage(Template):
                 if not height: height = calcHeight
 
             except:
-                try:                # try imageMagick instead
-                    calcWidth, calcHeight = os.popen(
-                        'identify -format "%w,%h" ' + src).read().split(',')
+                try:    # try imageMagick instead
+                    calcWidth, calcHeight = (
+                        os.popen(f'identify -format "%w,%h" {src}')
+                        .read()
+                        .split(',')
+                    )
                     if not width: width = calcWidth
                     if not height: height = calcHeight
-        
+
                 except:
                     pass
-                
+
         if width and height:
             return ''.join(['<img src="', src, '" width="', str(width), '" height="', str(height),
                            '" alt="', alt, '" border="', str(border), '" />'])
@@ -189,7 +189,7 @@ class _SkeletonPage(Template):
         return time.strftime(formatString, time.localtime(time.time()))
     
     def spacer(self, width=1,height=1):
-        return '<img src="spacer.gif" width="%s" height="%s" alt="" />'% (str(width), str(height))
+        return f'<img src="spacer.gif" width="{str(width)}" height="{str(height)}" alt="" />'
     
     def formHTMLTag(self, tagName, attributes={}):
         """returns a string containing an HTML <tag> """

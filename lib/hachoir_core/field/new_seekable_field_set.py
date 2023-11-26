@@ -47,7 +47,7 @@ class NewRootSeekableFieldSet(GenericFieldSet):
         # If last field is too big, delete it
         while self._size < self._current_size:
             field = self._deleteField(len(self._fields)-1)
-            message.append("delete field %s" % field.path)
+            message.append(f"delete field {field.path}")
         assert self._current_size <= self._size
 
         blocks = [(x.absolute_address, x.size) for x in self._fields]
@@ -58,12 +58,12 @@ class NewRootSeekableFieldSet(GenericFieldSet):
             self.setUniqueFieldName(field)
             self._fields.append(field.name, field)
             fields.append(field)
-            message.append("found unparsed segment: start %s, length %s" % (start, length))
+            message.append(f"found unparsed segment: start {start}, length {length}")
 
         self.seekBit(self._size, relative=False)
         message = ", ".join(message)
         if fields:
-            self.warning("[Autofix] Fix parser error: " + message)
+            self.warning(f"[Autofix] Fix parser error: {message}")
         return fields
 
     def _stopFeeding(self):

@@ -102,7 +102,5 @@ class TransformerTransaction(object):
     def __init__(self, *args, **kwargs):
         self._response = None
     def response(self):
-        if self._response:
-            return self._response
-        return TransformerResponse()
+        return self._response if self._response else TransformerResponse()
 

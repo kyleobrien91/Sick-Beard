@@ -54,15 +54,14 @@ class BuiltinSSLAdapter(wsgiserver.SSLAdapter):
     def get_environ(self, sock):
         """Create WSGI environ entries to be merged into each request."""
         cipher = sock.cipher()
-        ssl_environ = {
+        return {
             "wsgi.url_scheme": "https",
             "HTTPS": "on",
             'SSL_PROTOCOL': cipher[1],
             'SSL_CIPHER': cipher[0]
-##            SSL_VERSION_INTERFACE 	string 	The mod_ssl program version
-##            SSL_VERSION_LIBRARY 	string 	The OpenSSL program version
-            }
-        return ssl_environ
+            # ##            SSL_VERSION_INTERFACE 	string 	The mod_ssl program version
+            # ##            SSL_VERSION_LIBRARY 	string 	The OpenSSL program version
+        }
     
     def makefile(self, sock, mode='r', bufsize= -1):
         return wsgiserver.CP_fileobject(sock, mode, bufsize)

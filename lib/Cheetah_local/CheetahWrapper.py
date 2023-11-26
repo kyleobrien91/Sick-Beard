@@ -31,10 +31,7 @@ def fprintfMessage(stream, format, *args):
         format = format[:-1]
     else:
         format += '\n'
-    if args:
-        message = format % args
-    else:
-        message = format
+    message = format % args if args else format
     stream.write(message)
 
 class Error(Exception):
@@ -142,18 +139,18 @@ class CheetahWrapper(object):
             # Or meth.func_name (Python >= 2.1 only, sometimes works on 2.0)
             methInitial = methName[0]
             if command in (methName, methInitial):
-                sys.argv[0] += (" " + methName)
+                sys.argv[0] += f" {methName}"
                 # @@MO: I don't necessarily agree sys.argv[0] should be 
                 # modified.
                 meth()
                 return
         # If none of the commands matched.
-        usage(HELP_PAGE1, "unknown command '%s'" % command)
+        usage(HELP_PAGE1, f"unknown command '{command}'")
 
     def parseOpts(self, args):
         C, D, W = self.chatter, self.debug, self.warn
         self.isCompile = isCompile = self.command[0] == 'c'
-        defaultOext = isCompile and ".py" or ".html"
+        defaultOext = ".py" if isCompile else ".html"
         self.parser = OptionParser()
         pao = self.parser.add_option
         pao("--idir", action="store", dest="idir", default='', help='Input directory (defaults to current directory)')
@@ -179,8 +176,7 @@ class CheetahWrapper(object):
         if sys.platform == "win32":
             new_files = []
             for spec in files:
-                file_list = glob.glob(spec)
-                if file_list:
+                if file_list := glob.glob(spec):
                     new_files.extend(file_list)
                 else:
                     new_files.append(spec)
@@ -219,9 +215,8 @@ Files are %s""", args, pprint.pformat(vars(opts)), files)
         if opts.env:
             self.searchList.insert(0, os.environ)
         if opts.pickle:
-            f = open(opts.pickle, 'rb')
-            unpickled = pickle.load(f)
-            f.close()
+            with open(opts.pickle, 'rb') as f:
+                unpickled = pickle.load(f)
             self.searchList.insert(0, unpickled)
 
     ##################################################
@@ -309,9 +304,9 @@ you do have write permission to and re-run the tests.""")
         assert self.opts.oext, "oext is empty!"
         iext, oext = self.opts.iext, self.opts.oext
         if iext and not iext.startswith("."):
-            self.opts.iext = "." + iext
+            self.opts.iext = f".{iext}"
         if oext and not oext.startswith("."):
-            self.opts.oext = "." + oext
+            self.opts.oext = f".{oext}"
     
 
 
@@ -322,7 +317,7 @@ you do have write permission to and re-run the tests.""")
             self._compileOrFillStdin()
             return
         elif not files and opts.recurse:
-            which = opts.idir and "idir" or "current"
+            which = "idir" if opts.idir else "current"
             C("Drilling down recursively from %s directory.", which)
             sourceFiles = []
             dir = os.path.join(self.opts.idir, os.curdir)
@@ -401,8 +396,8 @@ you do have write permission to and re-run the tests.""")
                 fmt = "Collision: multiple source files %s map to one destination file %s"
                 W(fmt, sources, dst)
         if isError:
-            what = self.isCompile and "Compilation" or "Filling"
-            sys.exit("%s aborted due to collisions" % what)
+            what = "Compilation" if self.isCompile else "Filling"
+            sys.exit(f"{what} aborted due to collisions")
                 
 
     def _expandSourceFilesWalk(self, arg, dir, files):
@@ -427,7 +422,7 @@ you do have write permission to and re-run the tests.""")
         C, D, W = self.chatter, self.debug, self.warn
         idir = self.opts.idir
         iext = self.opts.iext
-        files = [] 
+        files = []
         for f in self.pathArgs:
             oldFilesLen = len(files)
             D("Expanding %s", f)
@@ -437,7 +432,7 @@ you do have write permission to and re-run the tests.""")
                 if recurse:
                     os.path.walk(path, self._expandSourceFilesWalk, files)
                 else:
-                    raise Error("source file '%s' is a directory" % path)
+                    raise Error(f"source file '{path}' is a directory")
             elif os.path.isfile(path):
                 files.append(path)
             elif (addIextIfMissing and not path.endswith(iext) and 
@@ -510,18 +505,17 @@ you do have write permission to and re-run the tests.""")
             self.error('The value of option --templateAPIClass is invalid\n'
                        'It must be in the form "module:class", '
                        'e.g. "Cheetah.Template:Template"')
-            
+
         modname, classname = modname.split(':')
 
-        C('using --templateAPIClass=%s:%s'%(modname, classname))
-        
+        C(f'using --templateAPIClass={modname}:{classname}')
+
         if p >= 0:
             mod = getattr(__import__(modname[:p], {}, {}, [modname[p+1:]]), modname[p+1:])
         else:
             mod = __import__(modname, {}, {}, [])
 
-        klass = getattr(mod, classname, None)
-        if klass:
+        if klass := getattr(mod, classname, None):
             self._templateClass = klass
             return klass
         else:
@@ -535,9 +529,10 @@ you do have write permission to and re-run the tests.""")
 
         def getkws(**kws):
             return kws
+
         if self.opts.compilerSettingsString:
             try:
-                exec('settings = getkws(%s)'%self.opts.compilerSettingsString)
+                exec(f'settings = getkws({self.opts.compilerSettingsString})')
             except:                
                 self.error("There's an error in your --settings option."
                           "It must be valid Python syntax.\n"
@@ -547,9 +542,8 @@ you do have write permission to and re-run the tests.""")
 
             validKeys = DEFAULT_COMPILER_SETTINGS.keys()
             if [k for k in settings.keys() if k not in validKeys]:
-                self.error(
-                    'The --setting "%s" is not a valid compiler setting name.'%k)
-            
+                self.error(f'The --setting "{k}" is not a valid compiler setting name.')
+
             self._compilerSettings = settings
             return settings
         else:
@@ -576,7 +570,7 @@ you do have write permission to and re-run the tests.""")
         base = b.base
         basename = b.basename
         dstDir = os.path.dirname(dst)
-        what = self.isCompile and "Compiling" or "Filling"
+        what = "Compiling" if self.isCompile else "Filling"
         C("%s %s -> %s^", what, src, dst) # No trailing newline.
         if os.path.exists(dst) and not self.opts.nobackup:
             bak = b.bak
@@ -600,7 +594,7 @@ be named according to the same rules as Python modules.""" % tup)
             #output = str(TemplateClass(file=src, searchList=self.searchList))
             tclass = TemplateClass.compile(file=src, compilerSettings=compilerSettings)
             output = str(tclass(searchList=self.searchList))
-            
+
         if bak:
             shutil.copyfile(dst, bak)
         if dstDir and not os.path.exists(dstDir):
@@ -611,9 +605,8 @@ be named according to the same rules as Python modules.""" % tup)
         if self.opts.stdout:
             sys.stdout.write(output)
         else:
-            f = open(dst, 'w')
-            f.write(output)
-            f.close()
+            with open(dst, 'w') as f:
+                f.write(output)
             
 
 # Called when invoked as `cheetah`

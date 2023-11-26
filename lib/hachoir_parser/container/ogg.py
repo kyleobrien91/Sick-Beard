@@ -47,7 +47,7 @@ class Lacing(FieldSet):
 def parseVorbisComment(parent):
     yield PascalString32(parent, 'vendor', charset="UTF-8")
     yield UInt32(parent, 'count')
-    for index in xrange(parent["count"].value):
+    for _ in xrange(parent["count"].value):
         yield PascalString32(parent, 'metadata[]', charset="UTF-8")
     if parent.current_size != parent.size:
         yield UInt8(parent, "framing_flag")
@@ -139,12 +139,9 @@ class Chunk(FieldSet):
             yield UInt8(self, 'type')
             yield String(self, 'codec', 6)
         if self.parser:
-            for field in self.parser(self):
-                yield field
-        else:
-            size = (self.size - self.current_size) // 8
-            if size:
-                yield RawBytes(self, "raw", size)
+            yield from self.parser(self)
+        elif size := (self.size - self.current_size) // 8:
+            yield RawBytes(self, "raw", size)
 
 class Packets:
     def __init__(self, first):
@@ -171,10 +168,7 @@ class Packets:
 class Segments(Fragment):
     def __init__(self, parent, *args, **kw):
         Fragment.__init__(self, parent, *args, **kw)
-        if parent['last_page'].value:
-            next = None
-        else:
-            next = self.createNext
+        next = None if parent['last_page'].value else self.createNext
         self.setLinks(parent.parent.streams.setdefault(parent['serial'].value, self), next)
 
     def _createInputStream(self, **args):
@@ -221,7 +215,7 @@ class OggPage(FieldSet):
     def createFields(self):
         yield String(self, 'capture_pattern', 4, charset="ASCII")
         if self['capture_pattern'].value != self.MAGIC:
-            self.warning('Invalid signature. An Ogg page must start with "%s".' % self.MAGIC)
+            self.warning(f'Invalid signature. An Ogg page must start with "{self.MAGIC}".')
         yield UInt8(self, 'stream_structure_version')
         yield Bit(self, 'continued_packet')
         yield Bit(self, 'first_page')
@@ -240,7 +234,7 @@ class OggPage(FieldSet):
         if self['capture_pattern'].value != self.MAGIC:
             return "Wrong signature"
         if self['stream_structure_version'].value != 0:
-            return "Unknown structure version (%s)" % self['stream_structure_version'].value
+            return f"Unknown structure version ({self['stream_structure_version'].value})"
         return ""
 
 class OggFile(Parser):
@@ -270,14 +264,11 @@ class OggFile(Parser):
             try:
                 page = self[index]
             except MissingField:
-                if self.done:
-                    return True
-                return "Unable to get page #%u" % index
+                return True if self.done else "Unable to get page #%u" % index
             except (InputStreamError, ParserError):
                 return "Unable to create page #%u" % index
-            err = page.validate()
-            if err:
-                return "Invalid page #%s: %s" % (index, err)
+            if err := page.validate():
+                return f"Invalid page #{index}: {err}"
         return True
 
     def createMimeType(self):
@@ -304,28 +295,16 @@ class OggFile(Parser):
     def createLastPage(self):
         start = self[0].size
         end = MAX_FILESIZE * 8
-        if True:
-            # FIXME: This doesn't work on all files (eg. some Ogg/Theora)
-            offset = self.stream.searchBytes("OggS\0\5", start, end)
-            if offset is None:
-                offset = self.stream.searchBytes("OggS\0\4", start, end)
-            if offset is None:
-                return None
-            return createOrphanField(self, offset, OggPage, "page")
-        else:
-            # Very slow version
-            page = None
-            while True:
-                offset = self.stream.searchBytes("OggS\0", start, end)
-                if offset is None:
-                    break
-                page = createOrphanField(self, offset, OggPage, "page")
-                start += page.size
-            return page
+        # FIXME: This doesn't work on all files (eg. some Ogg/Theora)
+        offset = self.stream.searchBytes("OggS\0\5", start, end)
+        if offset is None:
+            offset = self.stream.searchBytes("OggS\0\4", start, end)
+        if offset is None:
+            return None
+        return createOrphanField(self, offset, OggPage, "page")
 
     def createContentSize(self):
-        page = self.createLastPage()
-        if page:
+        if page := self.createLastPage():
             return page.absolute_address + page.size
         else:
             return None

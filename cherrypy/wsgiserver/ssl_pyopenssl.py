@@ -195,7 +195,7 @@ class pyOpenSSLAdapter(wsgiserver.SSLAdapter):
 ##            SSL_VERSION_INTERFACE 	string 	The mod_ssl program version
 ##            SSL_VERSION_LIBRARY 	string 	The OpenSSL program version
             }
-        
+
         if self.certificate:
             # Server certificate attributes
             cert = open(self.certificate, 'rb').read()
@@ -206,17 +206,17 @@ class pyOpenSSLAdapter(wsgiserver.SSLAdapter):
 ##                'SSL_SERVER_V_START': Validity of server's certificate (start time),
 ##                'SSL_SERVER_V_END': Validity of server's certificate (end time),
                 })
-            
+
             for prefix, dn in [("I", cert.get_issuer()),
                                ("S", cert.get_subject())]:
                 # X509Name objects don't seem to have a way to get the
                 # complete DN string. Use str() and slice it instead,
                 # because str(dn) == "<X509Name object '/C=US/ST=...'>"
                 dnstr = str(dn)[18:-2]
-                
-                wsgikey = 'SSL_SERVER_%s_DN' % prefix
+
+                wsgikey = f'SSL_SERVER_{prefix}_DN'
                 ssl_environ[wsgikey] = dnstr
-                
+
                 # The DN should be of the form: /k1=v1/k2=v2, but we must allow
                 # for any value to contain slashes itself (in a URL).
                 while dnstr:
@@ -225,17 +225,16 @@ class pyOpenSSLAdapter(wsgiserver.SSLAdapter):
                     pos = dnstr.rfind("/")
                     dnstr, key = dnstr[:pos], dnstr[pos + 1:]
                     if key and value:
-                        wsgikey = 'SSL_SERVER_%s_DN_%s' % (prefix, key)
+                        wsgikey = f'SSL_SERVER_{prefix}_DN_{key}'
                         ssl_environ[wsgikey] = value
-        
+
         return ssl_environ
     
     def makefile(self, sock, mode='r', bufsize= -1):
-        if SSL and isinstance(sock, SSL.ConnectionType):
-            timeout = sock.gettimeout()
-            f = SSL_fileobject(sock, mode, bufsize)
-            f.ssl_timeout = timeout
-            return f
-        else:
+        if not SSL or not isinstance(sock, SSL.ConnectionType):
             return wsgiserver.CP_fileobject(sock, mode, bufsize)
+        timeout = sock.gettimeout()
+        f = SSL_fileobject(sock, mode, bufsize)
+        f.ssl_timeout = timeout
+        return f
 
