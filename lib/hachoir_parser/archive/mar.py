@@ -22,8 +22,7 @@ class FileIndex(FieldSet):
         yield UInt32(self, "offset")
 
     def createDescription(self):
-        return "File %s (%s) at %s" % (
-            self["filename"].value, self["filesize"].display, self["offset"].value)
+        return f'File {self["filename"].value} ({self["filesize"].display}) at {self["offset"].value}'
 
 class MarFile(Parser):
     MAGIC = "MARC"
@@ -51,17 +50,16 @@ class MarFile(Parser):
         yield UInt32(self, "version")
         yield UInt32(self, "nb_file")
         files = []
-        for index in xrange(self["nb_file"].value):
+        for _ in xrange(self["nb_file"].value):
             item = FileIndex(self, "file[]")
             yield item
             if item["filesize"].value:
                 files.append(item)
         files.sort(key=lambda item: item["offset"].value)
         for index in files:
-            padding = self.seekByte(index["offset"].value)
-            if padding:
+            if padding := self.seekByte(index["offset"].value):
                 yield padding
             size = index["filesize"].value
-            desc = "File %s" % index["filename"].value
+            desc = f'File {index["filename"].value}'
             yield SubFile(self, "data[]", size, desc, filename=index["filename"].value)
 

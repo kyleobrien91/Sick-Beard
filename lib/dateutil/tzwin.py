@@ -42,10 +42,7 @@ class tzwinbase(datetime.tzinfo):
             return datetime.timedelta(0)
         
     def tzname(self, dt):
-        if self._isdst(dt):
-            return self._dstname
-        else:
-            return self._stdname
+        return self._dstname if self._isdst(dt) else self._stdname
 
     def list():
         """Return a list of all time zones known to the system."""
@@ -108,7 +105,7 @@ class tzwin(tzwinbase):
          self._dstminute) = tup[12:17]
 
     def __repr__(self):
-        return "tzwin(%s)" % repr(self._name)
+        return f"tzwin({repr(self._name)})"
 
     def __reduce__(self):
         return (self.__class__, (self._name,))

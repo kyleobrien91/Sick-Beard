@@ -27,9 +27,7 @@ import sys
 
 def as_dict(config):
     """Return a dict from 'config' whether it is a dict, file, or filename."""
-    if isinstance(config, basestring):
-        config = Parser().dict_from_file(config)
-    elif hasattr(config, 'read'):
+    if isinstance(config, basestring) or hasattr(config, 'read'):
         config = Parser().dict_from_file(config)
     return config
 
@@ -65,7 +63,7 @@ class NamespaceSet(dict):
                 ns, name = k.split(".", 1)
                 bucket = ns_confs.setdefault(ns, {})
                 bucket[name] = config[k]
-        
+
         # I chose __enter__ and __exit__ so someday this could be
         # rewritten using Python 2.5's 'with' statement:
         # for ns, handler in self.iteritems():
@@ -73,22 +71,20 @@ class NamespaceSet(dict):
         #         for k, v in ns_confs.get(ns, {}).iteritems():
         #             callable(k, v)
         for ns, handler in self.items():
-            exit = getattr(handler, "__exit__", None)
-            if exit:
+            if exit := getattr(handler, "__exit__", None):
                 callable = handler.__enter__()
                 no_exc = True
                 try:
-                    try:
-                        for k, v in ns_confs.get(ns, {}).items():
-                            callable(k, v)
-                    except:
-                        # The exceptional case is handled here
-                        no_exc = False
-                        if exit is None:
-                            raise
-                        if not exit(*sys.exc_info()):
-                            raise
-                        # The exception is swallowed if exit() returns true
+                    for k, v in ns_confs.get(ns, {}).items():
+                        callable(k, v)
+                except:
+                    # The exceptional case is handled here
+                    no_exc = False
+                    if exit is None:
+                        raise
+                    if not exit(*sys.exc_info()):
+                        raise
+                    # The exception is swallowed if exit() returns true
                 finally:
                     # The normal and non-local-goto cases are handled here
                     if no_exc and exit:
@@ -98,8 +94,7 @@ class NamespaceSet(dict):
                     handler(k, v)
     
     def __repr__(self):
-        return "%s.%s(%s)" % (self.__module__, self.__class__.__name__,
-                              dict.__repr__(self))
+        return f"{self.__module__}.{self.__class__.__name__}({dict.__repr__(self)})"
     
     def __copy__(self):
         newobj = self.__class__()
@@ -132,11 +127,8 @@ class Config(dict):
     
     def update(self, config):
         """Update self from a dict, file or filename."""
-        if isinstance(config, basestring):
+        if isinstance(config, basestring) or hasattr(config, 'read'):
             # Filename
-            config = Parser().dict_from_file(config)
-        elif hasattr(config, 'read'):
-            # Open file object
             config = Parser().dict_from_file(config)
         else:
             config = config.copy()
@@ -144,13 +136,12 @@ class Config(dict):
     
     def _apply(self, config):
         """Update self from a dict."""
-        which_env = config.get('environment')
-        if which_env:
+        if which_env := config.get('environment'):
             env = self.environments[which_env]
             for k in env:
                 if k not in config:
                     config[k] = env[k]
-        
+
         dict.update(self, config)
         self.namespaces(config)
     
@@ -213,10 +204,9 @@ class Parser(ConfigParser):
 class _Builder:
     
     def build(self, o):
-        m = getattr(self, 'build_' + o.__class__.__name__, None)
+        m = getattr(self, f'build_{o.__class__.__name__}', None)
         if m is None:
-            raise TypeError("unrepr does not recognize %s" % 
-                            repr(o.__class__.__name__))
+            raise TypeError(f"unrepr does not recognize {repr(o.__class__.__name__)}")
         return m(o)
     
     def build_Subscript(self, o):
@@ -240,11 +230,8 @@ class _Builder:
         return o.value
     
     def build_Dict(self, o):
-        d = {}
         i = iter(map(self.build, o.getChildren()))
-        for el in i:
-            d[el] = i.next()
-        return d
+        return {el: i.next() for el in i}
     
     def build_Tuple(self, o):
         return tuple(self.build_List(o))
@@ -257,21 +244,21 @@ class _Builder:
             return True
         if name == 'False':
             return False
-        
+
         # See if the Name is a package or module. If it is, import it.
         try:
             return modules(name)
         except ImportError:
             pass
-        
+
         # See if the Name is in builtins.
         try:
             import __builtin__
             return getattr(__builtin__, name)
         except AttributeError:
             pass
-        
-        raise TypeError("unrepr could not resolve the name %s" % repr(name))
+
+        raise TypeError(f"unrepr could not resolve the name {repr(name)}")
     
     def build_Add(self, o):
         left, right = map(self.build, o.getChildren())
@@ -299,8 +286,8 @@ def _astnode(s):
         # Fallback to eval when compiler package is not available,
         # e.g. IronPython 1.0.
         return eval(s)
-    
-    p = compiler.parse("__tempvalue__ = " + s)
+
+    p = compiler.parse(f"__tempvalue__ = {s}")
     return p.getChildren()[1].getChildren()[0].getChildren()[1]
     
 
@@ -330,15 +317,14 @@ def attributes(full_attribute_name):
     last_dot = full_attribute_name.rfind(".")
     attr_name = full_attribute_name[last_dot + 1:]
     mod_path = full_attribute_name[:last_dot]
-    
+
     mod = modules(mod_path)
     # Let an AttributeError propagate outward.
     try:
         attr = getattr(mod, attr_name)
     except AttributeError:
-        raise AttributeError("'%s' object has no attribute '%s'"
-                             % (mod_path, attr_name))
-    
+        raise AttributeError(f"'{mod_path}' object has no attribute '{attr_name}'")
+
     # Return a reference to the attribute.
     return attr
 

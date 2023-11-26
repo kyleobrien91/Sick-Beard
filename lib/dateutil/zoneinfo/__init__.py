@@ -24,10 +24,14 @@ def getzoneinfofile():
     filenames = os.listdir(os.path.join(os.path.dirname(__file__)))
     filenames.sort()
     filenames.reverse()
-    for entry in filenames:
-        if entry.startswith("zoneinfo") and ".tar." in entry:
-            return os.path.join(os.path.dirname(__file__), entry)
-    return None
+    return next(
+        (
+            os.path.join(os.path.dirname(__file__), entry)
+            for entry in filenames
+            if entry.startswith("zoneinfo") and ".tar." in entry
+        ),
+        None,
+    )
 
 ZONEINFOFILE = getzoneinfofile()
 
@@ -62,8 +66,9 @@ def rebuild(filename, tag=None, format="gz"):
     tmpdir = tempfile.mkdtemp()
     zonedir = os.path.join(tmpdir, "zoneinfo")
     moduledir = os.path.dirname(__file__)
-    if tag: tag = "-"+tag
-    targetname = "zoneinfo%s.tar.%s" % (tag, format)
+    if tag:
+        tag = f"-{tag}"
+    targetname = f"zoneinfo{tag}.tar.{format}"
     try:
         tf = TarFile.open(filename)
         for name in tf.getnames():
@@ -72,13 +77,13 @@ def rebuild(filename, tag=None, format="gz"):
                     name == "leapseconds"):
                 tf.extract(name, tmpdir)
                 filepath = os.path.join(tmpdir, name)
-                os.system("zic -d %s %s" % (zonedir, filepath))
+                os.system(f"zic -d {zonedir} {filepath}")
         tf.close()
         target = os.path.join(moduledir, targetname)
         for entry in os.listdir(moduledir):
             if entry.startswith("zoneinfo") and ".tar." in entry:
                 os.unlink(os.path.join(moduledir, entry))
-        tf = TarFile.open(target, "w:%s" % format)
+        tf = TarFile.open(target, f"w:{format}")
         for entry in os.listdir(zonedir):
             entrypath = os.path.join(zonedir, entry)
             tf.add(entrypath, entry)

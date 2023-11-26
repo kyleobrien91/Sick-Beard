@@ -14,9 +14,7 @@ class Link(Field):
 
     def createDisplay(self):
         value = self.value
-        if value is None:
-            return "<%s>" % MissingField.__name__
-        return value.path
+        return f"<{MissingField.__name__}>" if value is None else value.path
 
     def _getField(self, name, const):
         target = self.value
@@ -99,8 +97,7 @@ class Fragment(FieldSet):
             yield link
         if field:
             yield field
-        for field in field_generator:
-            yield field
+        yield from field_generator
 
     def createFields(self):
         if self._size is None:

@@ -20,7 +20,7 @@ class RGB(FieldSet):
         name = self.color_name.get(rgb)
         if not name:
             name = "#%02X%02X%02X" % rgb
-        return "RGB color: " + name
+        return f"RGB color: {name}"
 
 class RGBA(RGB):
     static_size = 32

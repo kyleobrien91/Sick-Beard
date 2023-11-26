@@ -57,10 +57,7 @@ class weekday(object):
         self.n = n
 
     def __call__(self, n):
-        if n == self.n:
-            return self
-        else:
-            return self.__class__(self.weekday, n)
+        return self if n == self.n else self.__class__(self.weekday, n)
 
     def __eq__(self, other):
         try:
@@ -72,12 +69,9 @@ class weekday(object):
 
     def __repr__(self):
         s = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")[self.weekday]
-        if not self.n:
-            return s
-        else:
-            return "%s(%+d)" % (s, self.n)
+        return s if not self.n else "%s(%+d)" % (s, self.n)
 
-MO, TU, WE, TH, FR, SA, SU = weekdays = tuple([weekday(x) for x in range(7)])
+MO, TU, WE, TH, FR, SA, SU = weekdays = tuple(weekday(x) for x in range(7))
 
 class rrulebase:
     def __init__(self, cache=False):
@@ -85,10 +79,9 @@ class rrulebase:
             self._cache = []
             self._cache_lock = thread.allocate_lock()
             self._cache_gen  = self._iter()
-            self._cache_complete = False
         else:
             self._cache = None
-            self._cache_complete = False
+        self._cache_complete = False
         self._len = None
 
     def __iter__(self):
@@ -111,7 +104,7 @@ class rrulebase:
                 if self._cache_complete:
                     break
                 try:
-                    for j in range(10):
+                    for _ in range(10):
                         cache.append(gen.next())
                 except StopIteration:
                     self._cache_gen = gen = None
@@ -138,7 +131,7 @@ class rrulebase:
         elif item >= 0:
             gen = iter(self)
             try:
-                for i in range(item+1):
+                for _ in range(item+1):
                     res = gen.next()
             except StopIteration:
                 raise IndexError
@@ -149,62 +142,36 @@ class rrulebase:
     def __contains__(self, item):
         if self._cache_complete:
             return item in self._cache
-        else:
-            for i in self:
-                if i == item:
-                    return True
-                elif i > item:
-                    return False
+        for i in self:
+            if i == item:
+                return True
+            elif i > item:
+                return False
         return False
 
     # __len__() introduces a large performance penality.
     def count(self):
-        if self._len is None:
-            for x in self: pass
         return self._len
 
     def before(self, dt, inc=False):
-        if self._cache_complete:
-            gen = self._cache
-        else:
-            gen = self
+        gen = self._cache if self._cache_complete else self
         last = None
-        if inc:
-            for i in gen:
-                if i > dt:
-                    break
-                last = i
-        else:
-            for i in gen:
-                if i >= dt:
-                    break
-                last = i
+        for i in gen:
+            if inc and i > dt or not inc and i >= dt:
+                break
+            last = i
         return last
 
     def after(self, dt, inc=False):
-        if self._cache_complete:
-            gen = self._cache
-        else:
-            gen = self
-        if inc:
-            for i in gen:
-                if i >= dt:
-                    return i
-        else:
-            for i in gen:
-                if i > dt:
-                    return i
-        return None
+        gen = self._cache if self._cache_complete else self
+        return next((i for i in gen if inc and i >= dt or not inc and i > dt), None)
 
     def between(self, after, before, inc=False):
-        if self._cache_complete:
-            gen = self._cache
-        else:
-            gen = self
+        gen = self._cache if self._cache_complete else self
         started = False
         l = []
-        if inc:
-            for i in gen:
+        for i in gen:
+            if inc:
                 if i > before:
                     break
                 elif not started:
@@ -213,16 +180,14 @@ class rrulebase:
                         l.append(i)
                 else:
                     l.append(i)
-        else:
-            for i in gen:
-                if i >= before:
-                    break
-                elif not started:
-                    if i > after:
-                        started = True
-                        l.append(i)
-                else:
+            elif i >= before:
+                break
+            elif not started:
+                if i > after:
+                    started = True
                     l.append(i)
+            else:
+                l.append(i)
         return l
 
 class rrule(rrulebase):
@@ -267,8 +232,13 @@ class rrule(rrulebase):
                 if pos == 0 or not (-366 <= pos <= 366):
                     raise ValueError("bysetpos must be between 1 and 366, "
                                      "or between -366 and -1")
-        if not (byweekno or byyearday or bymonthday or
-                byweekday is not None or byeaster is not None):
+        if (
+            not byweekno
+            and not byyearday
+            and not bymonthday
+            and byweekday is None
+            and byeaster is None
+        ):
             if freq == YEARLY:
                 if not bymonth:
                     bymonth = dtstart.month
@@ -295,10 +265,7 @@ class rrule(rrulebase):
         if byeaster is not None:
             if not easter:
                 from dateutil import easter
-            if type(byeaster) is int:
-                self._byeaster = (byeaster,)
-            else:
-                self._byeaster = tuple(byeaster)
+            self._byeaster = (byeaster, ) if type(byeaster) is int else tuple(byeaster)
         else:
             self._byeaster = None
         # bymonthay
@@ -313,8 +280,8 @@ class rrule(rrulebase):
                 self._bymonthday = (bymonthday,)
                 self._bynmonthday = ()
         else:
-            self._bymonthday = tuple([x for x in bymonthday if x > 0])
-            self._bynmonthday = tuple([x for x in bymonthday if x < 0])
+            self._bymonthday = tuple(x for x in bymonthday if x > 0)
+            self._bynmonthday = tuple(x for x in bymonthday if x < 0)
         # byweekno
         if byweekno is None:
             self._byweekno = None
@@ -354,30 +321,21 @@ class rrule(rrulebase):
                 self._bynweekday = None
         # byhour
         if byhour is None:
-            if freq < HOURLY:
-                self._byhour = (dtstart.hour,)
-            else:
-                self._byhour = None
+            self._byhour = (dtstart.hour, ) if freq < HOURLY else None
         elif type(byhour) is int:
             self._byhour = (byhour,)
         else:
             self._byhour = tuple(byhour)
         # byminute
         if byminute is None:
-            if freq < MINUTELY:
-                self._byminute = (dtstart.minute,)
-            else:
-                self._byminute = None
+            self._byminute = (dtstart.minute, ) if freq < MINUTELY else None
         elif type(byminute) is int:
             self._byminute = (byminute,)
         else:
             self._byminute = tuple(byminute)
         # bysecond
         if bysecond is None:
-            if freq < SECONDLY:
-                self._bysecond = (dtstart.second,)
-            else:
-                self._bysecond = None
+            self._bysecond = (dtstart.second, ) if freq < SECONDLY else None
         elif type(bysecond) is int:
             self._bysecond = (bysecond,)
         else:
@@ -389,16 +347,16 @@ class rrule(rrulebase):
             self._timeset = []
             for hour in self._byhour:
                 for minute in self._byminute:
-                    for second in self._bysecond:
-                        self._timeset.append(
-                                datetime.time(hour, minute, second,
-                                                    tzinfo=self._tzinfo))
+                    self._timeset.extend(
+                        datetime.time(hour, minute, second, tzinfo=self._tzinfo)
+                        for second in self._bysecond
+                    )
             self._timeset.sort()
             self._timeset = tuple(self._timeset)
 
     def _iter(self):
         year, month, day, hour, minute, second, weekday, yearday, _ = \
-            self._dtstart.timetuple()
+                self._dtstart.timetuple()
 
         # Some local variables to speed things up a bit
         freq = self._freq
@@ -427,19 +385,23 @@ class rrule(rrulebase):
                      HOURLY:ii.ddayset,
                      MINUTELY:ii.ddayset,
                      SECONDLY:ii.ddayset}[freq]
-        
+
         if freq < HOURLY:
             timeset = self._timeset
         else:
             gettimeset = {HOURLY:ii.htimeset,
                           MINUTELY:ii.mtimeset,
                           SECONDLY:ii.stimeset}[freq]
-            if ((freq >= HOURLY and
-                 self._byhour and hour not in self._byhour) or
-                (freq >= MINUTELY and
-                 self._byminute and minute not in self._byminute) or
-                (freq >= SECONDLY and
-                 self._bysecond and second not in self._bysecond)):
+            if (
+                self._byhour
+                and hour not in self._byhour
+                or freq >= MINUTELY
+                and self._byminute
+                and minute not in self._byminute
+                or freq >= SECONDLY
+                and self._bysecond
+                and second not in self._bysecond
+            ):
                 timeset = ()
             else:
                 timeset = gettimeset(hour, minute, second)
@@ -576,11 +538,11 @@ class rrule(rrulebase):
                         minute = mod
                         hour += div
                         div, mod = divmod(hour, 24)
-                        if div:
-                            hour = mod
-                            day += div
-                            fixday = True
-                            filtered = False
+                    if div:
+                        hour = mod
+                        day += div
+                        fixday = True
+                        filtered = False
                     if ((not byhour or hour in byhour) and
                         (not byminute or minute in byminute)):
                         break
@@ -597,14 +559,14 @@ class rrule(rrulebase):
                         second = mod
                         minute += div
                         div, mod = divmod(minute, 60)
-                        if div:
-                            minute = mod
-                            hour += div
-                            div, mod = divmod(hour, 24)
-                            if div:
-                                hour = mod
-                                day += div
-                                fixday = True
+                    if div:
+                        minute = mod
+                        hour += div
+                        div, mod = divmod(hour, 24)
+                    if div:
+                        hour = mod
+                        day += div
+                        fixday = True
                     if ((not byhour or hour in byhour) and
                         (not byminute or minute in byminute) and
                         (not bysecond or second in bysecond)):
@@ -689,7 +651,7 @@ class _iterinfo(object):
                             i -= 7-firstwkst
                     else:
                         i = no1wkst
-                    for j in range(7):
+                    for _ in range(7):
                         self.wnomask[i] = 1
                         i += 1
                         if self.wdaymask[i] == rr._wkst:
@@ -703,7 +665,7 @@ class _iterinfo(object):
                     if i < self.yearlen:
                         # If week starts in next year, we
                         # don't care about it.
-                        for j in range(7):
+                        for _ in range(7):
                             self.wnomask[i] = 1
                             i += 1
                             if self.wdaymask[i] == rr._wkst:
@@ -782,7 +744,7 @@ class _iterinfo(object):
         set = [None]*(self.yearlen+7)
         i = datetime.date(year, month, day).toordinal()-self.yearordinal
         start = i
-        for j in range(7):
+        for _ in range(7):
             set[i] = i
             i += 1
             #if (not (0 <= i < self.yearlen) or
@@ -802,17 +764,19 @@ class _iterinfo(object):
         set = []
         rr = self.rrule
         for minute in rr._byminute:
-            for second in rr._bysecond:
-                set.append(datetime.time(hour, minute, second,
-                                         tzinfo=rr._tzinfo))
+            set.extend(
+                datetime.time(hour, minute, second, tzinfo=rr._tzinfo)
+                for second in rr._bysecond
+            )
         set.sort()
         return set
 
     def mtimeset(self, hour, minute, second):
-        set = []
         rr = self.rrule
-        for second in rr._bysecond:
-            set.append(datetime.time(hour, minute, second, tzinfo=rr._tzinfo))
+        set = [
+            datetime.time(hour, minute, second, tzinfo=rr._tzinfo)
+            for second in rr._bysecond
+        ]
         set.sort()
         return set
 
@@ -968,13 +932,13 @@ class _rrulestr:
             name = name.upper()
             value = value.upper()
             try:
-                getattr(self, "_handle_"+name)(rrkwargs, name, value,
-                                               ignoretz=ignoretz,
-                                               tzinfos=tzinfos)
+                getattr(self, f"_handle_{name}")(
+                    rrkwargs, name, value, ignoretz=ignoretz, tzinfos=tzinfos
+                )
             except AttributeError:
-                raise ValueError, "unknown parameter '%s'" % name
+                raise (ValueError, f"unknown parameter '{name}'")
             except (KeyError, ValueError):
-                raise ValueError, "invalid '%s': %s" % (name, value)
+                raise (ValueError, f"invalid '{name}': {value}")
         return rrule(dtstart=dtstart, cache=cache, **rrkwargs)
 
     def _parse_rfc(self, s,

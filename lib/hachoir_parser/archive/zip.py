@@ -156,18 +156,13 @@ def ZipStartCommonFields(self):
     yield UInt16(self, "extra_length", "Extra fields length")
 
 def zipGetCharset(self):
-    if self["flags/uses_unicode"].value:
-        return "UTF-8"
-    else:
-        return "ISO-8859-15"
+    return "UTF-8" if self["flags/uses_unicode"].value else "ISO-8859-15"
 
 class ZipCentralDirectory(FieldSet):
     HEADER = 0x02014b50
     def createFields(self):
         yield ZipVersion(self, "version_made_by", "Version made by")
-        for field in ZipStartCommonFields(self):
-            yield field
-
+        yield from ZipStartCommonFields(self)
         # Check unicode status
         charset = zipGetCharset(self)
 
@@ -178,15 +173,15 @@ class ZipCentralDirectory(FieldSet):
         yield UInt32(self, "offset_header", "Relative offset of local header")
         yield String(self, "filename", self["filename_length"].value,
                      "Filename", charset=charset)
-        if 0 < self["extra_length"].value:
+        if self["extra_length"].value > 0:
             yield RawBytes(self, "extra", self["extra_length"].value,
                            "Extra fields")
-        if 0 < self["comment_length"].value:
+        if self["comment_length"].value > 0:
             yield String(self, "comment", self["comment_length"].value,
                          "Comment", charset=charset)
 
     def createDescription(self):
-        return "Central directory: %s" % self["filename"].display
+        return f'Central directory: {self["filename"].display}'
 
 class Zip64EndCentralDirectory(FieldSet):
     HEADER = 0x06064b50
@@ -204,7 +199,7 @@ class Zip64EndCentralDirectory(FieldSet):
                      "Total number of entries in the central directory")
         yield UInt64(self, "size", "Size of the central directory")
         yield UInt64(self, "offset", "Offset of start of central directory")
-        if 0 < self["zip64_end_size"].value:
+        if self["zip64_end_size"].value > 0:
             yield RawBytes(self, "data_sector", self["zip64_end_size"].value,
                            "zip64 extensible data sector")
 
@@ -252,8 +247,7 @@ class FileEntry(FieldSet):
         size = self.stream.searchBytesLength(ZipDataDescriptor.HEADER_STRING, False,
                                             self.absolute_address+self.current_size)
         if size <= 0:
-            raise ParserError("Couldn't resync to %s" %
-                              ZipDataDescriptor.HEADER_STRING)
+            raise ParserError(f"Couldn't resync to {ZipDataDescriptor.HEADER_STRING}")
         yield self.data(size)
         yield textHandler(UInt32(self, "header[]", "Header"), hexadecimal)
         data_desc = ZipDataDescriptor(self, "data_desc", "Data descriptor")
@@ -262,17 +256,13 @@ class FileEntry(FieldSet):
         # The above could be checked anytime, but we prefer trying parsing
         # than aborting
         if self["crc32"].value == 0 and \
-            data_desc["file_compressed_size"].value != size:
+                data_desc["file_compressed_size"].value != size:
             raise ParserError("Bad resync: position=>%i but data_desc=>%i" %
                               (size, data_desc["file_compressed_size"].value))
 
     def createFields(self):
-        for field in ZipStartCommonFields(self):
-            yield field
-        length = self["filename_length"].value
-
-
-        if length:
+        yield from ZipStartCommonFields(self)
+        if length := self["filename_length"].value:
             filename = String(self, "filename", length, "Filename",
                               charset=zipGetCharset(self))
             yield filename
@@ -283,14 +273,12 @@ class FileEntry(FieldSet):
         if size > 0:
             yield self.data(size)
         elif self["flags/incomplete"].value:
-            for field in self.resync():
-                yield field
+            yield from self.resync()
         if self["flags/has_descriptor"].value:
             yield ZipDataDescriptor(self, "data_desc", "Data descriptor")
 
     def createDescription(self):
-        return "File entry: %s (%s)" % \
-            (self["filename"].value, self["compressed_size"].display)
+        return f'File entry: {self["filename"].value} ({self["compressed_size"].display})'
 
     def validate(self):
         if self["compression"].value not in COMPRESSION_METHOD:
@@ -414,14 +402,12 @@ class ZipFile(Parser):
         if self["file[0]/filename"].value == "mimetype":
             mime = self["file[0]/compressed_data"].value
             if mime in self.MIME_TYPES:
-                return "." + self.MIME_TYPES[mime]
+                return f".{self.MIME_TYPES[mime]}"
         return ".zip"
 
     def createContentSize(self):
         start = 0
         end = MAX_FILESIZE * 8
         end = self.stream.searchBytes("PK\5\6", start, end)
-        if end is not None:
-            return end + 22*8
-        return None
+        return end + 22*8 if end is not None else None
 

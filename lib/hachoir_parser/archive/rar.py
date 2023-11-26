@@ -135,8 +135,7 @@ class FileFlags(FieldSet):
         yield Bit(self, "is_solid", "Information from previous files is used (solid flag)")
         # The 3 following lines are what blocks more staticity
         yield Enum(Bits(self, "dictionary_size", 3, "Dictionary size"), DICTIONARY_SIZE)
-        for bit in commonFlags(self):
-            yield bit
+        yield from commonFlags(self)
         yield Bit(self, "is_large", "file64 operations needed")
         yield Bit(self, "is_unicode", "Filename also encoded using Unicode")
         yield Bit(self, "has_salt", "Has salt for encryption")
@@ -180,10 +179,7 @@ def specialHeader(s, is_file):
     # End additional field
     size = s["filename_length"].value
     if size > 0:
-        if s["flags/is_unicode"].value:
-            charset = "UTF-8"
-        else:
-            charset = "ISO-8859-15"
+        charset = "UTF-8" if s["flags/is_unicode"].value else "ISO-8859-15"
         yield String(s, "filename", size, "Filename", charset=charset)
     # Start additional fields from unrar - file only
     if is_file:
@@ -204,8 +200,7 @@ def fileBody(s):
         yield RawBytes(s, "compressed_data", size, "File compressed data")
 
 def fileDescription(s):
-    return "File entry: %s (%s)" % \
-           (s["filename"].display, s["compressed_size"].display)
+    return f'File entry: {s["filename"].display} ({s["compressed_size"].display})'
 
 def newSubHeader(s):
     return specialHeader(s, False)
@@ -266,7 +261,7 @@ class Block(FieldSet):
             self.info("Processing as unknown block block of type %u" % type)
 
         self._size = 8*self["block_size"].value
-        if t == 0x74 or t == 0x7A:
+        if t in [0x74, 0x7A]:
             self._size += 8*self["compressed_size"].value
             if "is_large" in self["flags"] and self["flags/is_large"].value:
                 self._size += 8*self["large_size"].value
@@ -279,27 +274,22 @@ class Block(FieldSet):
         yield textHandler(UInt8(self, "block_type", "Block type"), hexadecimal)
 
         # Parse flags
-        for field in self.parseFlags():
-            yield field
-
+        yield from self.parseFlags()
         # Get block size
         yield filesizeHandler(UInt16(self, "block_size", "Block size"))
 
         # Parse remaining header
-        for field in self.parseHeader():
-            yield field
-
+        yield from self.parseHeader()
         # Finish header with stuff of unknow size
         size = self["block_size"].value - (self.current_size//8)
         if size > 0:
             yield RawBytes(self, "unknown", size, "Unknow data (UInt32 probably)")
 
         # Parse body
-        for field in self.parseBody():
-            yield field
+        yield from self.parseBody()
 
     def createDescription(self):
-        return "Block entry: %s" % self["type"].display
+        return f'Block entry: {self["type"].display}'
 
     def parseFlags(self):
         yield BlockFlags(self, "flags", "Block header flags")
@@ -347,7 +337,5 @@ class RarFile(Parser):
         start = 0
         end = MAX_FILESIZE * 8
         pos = self.stream.searchBytes("\xC4\x3D\x7B\x00\x40\x07\x00", start, end)
-        if pos is not None:
-            return pos + 7*8
-        return None
+        return pos + 7*8 if pos is not None else None
 

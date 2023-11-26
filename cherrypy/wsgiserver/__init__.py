@@ -146,19 +146,19 @@ def read_headers(rfile, hdict=None):
     """
     if hdict is None:
         hdict = {}
-    
+
     while True:
         line = rfile.readline()
         if not line:
             # No more data--illegal end of headers
             raise ValueError("Illegal end of headers.")
-        
+
         if line == CRLF:
             # Normal end of headers
             break
         if not line.endswith(CRLF):
             raise ValueError("HTTP requires CRLF terminators")
-        
+
         if line[0] in ' \t':
             # It's a continuation line.
             v = line.strip()
@@ -171,13 +171,12 @@ def read_headers(rfile, hdict=None):
             k = k.strip().title()
             v = v.strip()
             hname = k
-        
+
         if k in comma_separated_headers:
-            existing = hdict.get(hname)
-            if existing:
+            if existing := hdict.get(hname):
                 v = ", ".join((existing, v))
         hdict[hname] = v
-    
+
     return hdict
 
 
@@ -225,13 +224,11 @@ class SizeCheckWrapper(object):
         # Shamelessly stolen from StringIO
         total = 0
         lines = []
-        line = self.readline()
-        while line:
+        while line := self.readline():
             lines.append(line)
             total += len(line)
             if 0 < sizehint <= total:
                 break
-            line = self.readline()
         return lines
     
     def close(self):
@@ -257,11 +254,7 @@ class KnownLengthRFile(object):
     def read(self, size=None):
         if self.remaining == 0:
             return ''
-        if size is None:
-            size = self.remaining
-        else:
-            size = min(size, self.remaining)
-        
+        size = self.remaining if size is None else min(size, self.remaining)
         data = self.rfile.read(size)
         self.remaining -= len(data)
         return data
@@ -269,11 +262,7 @@ class KnownLengthRFile(object):
     def readline(self, size=None):
         if self.remaining == 0:
             return ''
-        if size is None:
-            size = self.remaining
-        else:
-            size = min(size, self.remaining)
-        
+        size = self.remaining if size is None else min(size, self.remaining)
         data = self.rfile.readline(size)
         self.remaining -= len(data)
         return data
@@ -282,13 +271,11 @@ class KnownLengthRFile(object):
         # Shamelessly stolen from StringIO
         total = 0
         lines = []
-        line = self.readline(sizehint)
-        while line:
+        while line := self.readline(sizehint):
             lines.append(line)
             total += len(line)
             if 0 < sizehint <= total:
                 break
-            line = self.readline(sizehint)
         return lines
     
     def close(self):
@@ -326,34 +313,34 @@ class ChunkedRFile(object):
     def _fetch(self):
         if self.closed:
             return
-        
+
         line = self.rfile.readline()
         self.bytes_read += len(line)
-        
+
         if self.maxlen and self.bytes_read > self.maxlen:
             raise MaxSizeExceeded("Request Entity Too Large", self.maxlen)
-        
+
         line = line.strip().split(";", 1)
-        
+
         try:
             chunk_size = line.pop(0)
             chunk_size = int(chunk_size, 16)
         except ValueError:
-            raise ValueError("Bad chunked transfer size: " + repr(chunk_size))
-        
+            raise ValueError(f"Bad chunked transfer size: {repr(chunk_size)}")
+
         if chunk_size <= 0:
             self.closed = True
             return
-        
+
 ##            if line: chunk_extension = line[0]
-        
+
         if self.maxlen and self.bytes_read + chunk_size > self.maxlen:
             raise IOError("Request Entity Too Large")
-        
+
         chunk = self.rfile.read(chunk_size)
         self.bytes_read += len(chunk)
         self.buffer += chunk
-        
+
         crlf = self.rfile.read(2)
         if crlf != CRLF:
             raise ValueError(
@@ -365,13 +352,13 @@ class ChunkedRFile(object):
         while True:
             if size and len(data) >= size:
                 return data
-            
+
             if not self.buffer:
                 self._fetch()
-                if not self.buffer:
-                    # EOF
-                    return data
-            
+            if not self.buffer:
+                # EOF
+                return data
+
             if size:
                 remaining = size - len(data)
                 data += self.buffer[:remaining]
@@ -384,41 +371,37 @@ class ChunkedRFile(object):
         while True:
             if size and len(data) >= size:
                 return data
-            
+
             if not self.buffer:
                 self._fetch()
-                if not self.buffer:
-                    # EOF
-                    return data
-            
+            if not self.buffer:
+                # EOF
+                return data
+
             newline_pos = self.buffer.find('\n')
             if size:
-                if newline_pos == -1:
-                    remaining = size - len(data)
-                    data += self.buffer[:remaining]
-                    self.buffer = self.buffer[remaining:]
-                else:
-                    remaining = min(size - len(data), newline_pos)
-                    data += self.buffer[:remaining]
-                    self.buffer = self.buffer[remaining:]
+                remaining = (
+                    size - len(data)
+                    if newline_pos == -1
+                    else min(size - len(data), newline_pos)
+                )
+                data += self.buffer[:remaining]
+                self.buffer = self.buffer[remaining:]
+            elif newline_pos == -1:
+                data += self.buffer
             else:
-                if newline_pos == -1:
-                    data += self.buffer
-                else:
-                    data += self.buffer[:newline_pos]
-                    self.buffer = self.buffer[newline_pos:]
+                data += self.buffer[:newline_pos]
+                self.buffer = self.buffer[newline_pos:]
     
     def readlines(self, sizehint=0):
         # Shamelessly stolen from StringIO
         total = 0
         lines = []
-        line = self.readline(sizehint)
-        while line:
+        while line := self.readline(sizehint):
             lines.append(line)
             total += len(line)
             if 0 < sizehint <= total:
                 break
-            line = self.readline(sizehint)
         return lines
     
     def read_trailer_lines(self):
@@ -450,13 +433,11 @@ class ChunkedRFile(object):
     def __iter__(self):
         # Shamelessly stolen from StringIO
         total = 0
-        line = self.readline(sizehint)
-        while line:
+        while line := self.readline(sizehint):
             yield line
             total += len(line)
             if 0 < sizehint <= total:
                 break
-            line = self.readline(sizehint)
 
 
 class HTTPRequest(object):
@@ -484,14 +465,12 @@ class HTTPRequest(object):
     def __init__(self, server, conn):
         self.server = server
         self.conn = conn
-        
+
         self.ready = False
         self.started_request = False
-        self.scheme = "http"
-        if self.server.ssl_adapter is not None:
-            self.scheme = "https"
+        self.scheme = "https" if self.server.ssl_adapter is not None else "http"
         self.inheaders = {}
-        
+
         self.status = ""
         self.outheaders = []
         self.sent_headers = False
@@ -696,7 +675,7 @@ class HTTPRequest(object):
         """
         if uri == "*":
             return None, None, uri
-        
+
         i = uri.find('://')
         if i > 0 and '?' not in uri[:i]:
             # An absoluteURI.
@@ -705,13 +684,8 @@ class HTTPRequest(object):
             scheme, remainder = uri[:i].lower(), uri[i + 3:]
             authority, path = remainder.split("/", 1)
             return scheme, authority, path
-        
-        if uri.startswith('/'):
-            # An abs_path.
-            return None, None, uri
-        else:
-            # An authority.
-            return None, uri, None
+
+        return (None, None, uri) if uri.startswith('/') else (None, uri, None)
     
     def respond(self):
         """Call the gateway and write its iterable output."""
@@ -774,17 +748,12 @@ class HTTPRequest(object):
         """
         hkeys = [key.lower() for key, value in self.outheaders]
         status = int(self.status[:3])
-        
+
         if status == 413:
             # Request Entity Too Large. Close conn to avoid garbage.
             self.close_connection = True
         elif "content-length" not in hkeys:
-            # "All 1xx (informational), 204 (no content),
-            # and 304 (not modified) responses MUST NOT
-            # include a message-body." So no point chunking.
-            if status < 200 or status in (204, 205, 304):
-                pass
-            else:
+            if status >= 200 and status not in (204, 205, 304):
                 if (self.response_protocol == 'HTTP/1.1'
                     and self.method != 'HEAD'):
                     # Use the chunked transfer-coding
@@ -793,17 +762,15 @@ class HTTPRequest(object):
                 else:
                     # Closing the conn is the only way to determine len.
                     self.close_connection = True
-        
+
         if "connection" not in hkeys:
             if self.response_protocol == 'HTTP/1.1':
                 # Both server and client are HTTP/1.1 or better
                 if self.close_connection:
                     self.outheaders.append(("Connection", "close"))
-            else:
-                # Server and/or client are HTTP/1.0
-                if not self.close_connection:
-                    self.outheaders.append(("Connection", "Keep-Alive"))
-        
+            elif not self.close_connection:
+                self.outheaders.append(("Connection", "Keep-Alive"))
+
         if (not self.close_connection) and (not self.chunked_read):
             # Read any remaining request body data on the socket.
             # "If an origin server receives a request that does not include an
@@ -820,16 +787,15 @@ class HTTPRequest(object):
             remaining = getattr(self.rfile, 'remaining', 0)
             if remaining > 0:
                 self.rfile.read(remaining)
-        
+
         if "date" not in hkeys:
             self.outheaders.append(("Date", rfc822.formatdate()))
-        
+
         if "server" not in hkeys:
             self.outheaders.append(("Server", self.server.server_name))
-        
-        buf = [self.server.protocol + " " + self.status + CRLF]
-        for k, v in self.outheaders:
-            buf.append(k + ": " + v + CRLF)
+
+        buf = [f"{self.server.protocol} {self.status}{CRLF}"]
+        buf.extend(f"{k}: {v}{CRLF}" for k, v in self.outheaders)
         buf.append(CRLF)
         self.conn.wfile.sendall("".join(buf))
 
@@ -890,11 +856,10 @@ if not _fileobject_uses_str_type:
                 # Read until EOF
                 self._rbuf = StringIO.StringIO()  # reset _rbuf.  we consume it via buf.
                 while True:
-                    data = self.recv(rbufsize)
-                    if not data:
+                    if data := self.recv(rbufsize):
+                        buf.write(data)
+                    else:
                         break
-                    buf.write(data)
-                return buf.getvalue()
             else:
                 # Read until size bytes or EOF seen, whichever comes first
                 buf_len = buf.tell()
@@ -934,7 +899,8 @@ if not _fileobject_uses_str_type:
                     buf_len += n
                     del data  # explicit free
                     #assert buf_len == buf.tell()
-                return buf.getvalue()
+
+            return buf.getvalue()
 
         def readline(self, size= -1):
             buf = self._rbuf
@@ -978,7 +944,6 @@ if not _fileobject_uses_str_type:
                         del data
                         break
                     buf.write(data)
-                return buf.getvalue()
             else:
                 # Read until size bytes or \n or EOF seen, whichever comes first
                 buf.seek(0, 2)  # seek end
@@ -1001,13 +966,12 @@ if not _fileobject_uses_str_type:
                         nl += 1
                         # save the excess data to _rbuf
                         self._rbuf.write(data[nl:])
-                        if buf_len:
-                            buf.write(data[:nl])
-                            break
-                        else:
+                        if not buf_len:
                             # Shortcut.  Avoid data copy through buf when returning
                             # a substring of our first recv().
                             return data[:nl]
+                        buf.write(data[:nl])
+                        break
                     n = len(data)
                     if n == size and not buf_len:
                         # Shortcut.  Avoid data copy through buf when
@@ -1019,8 +983,9 @@ if not _fileobject_uses_str_type:
                         break
                     buf.write(data)
                     buf_len += n
-                    #assert buf_len == buf.tell()
-                return buf.getvalue()
+                            #assert buf_len == buf.tell()
+
+            return buf.getvalue()
 
 else:
     class CP_fileobject(socket._fileobject):
@@ -1059,17 +1024,12 @@ else:
                 # Read until EOF
                 buffers = [self._rbuf]
                 self._rbuf = ""
-                if self._rbufsize <= 1:
-                    recv_size = self.default_bufsize
-                else:
-                    recv_size = self._rbufsize
-
+                recv_size = self.default_bufsize if self._rbufsize <= 1 else self._rbufsize
                 while True:
-                    data = self.recv(recv_size)
-                    if not data:
+                    if data := self.recv(recv_size):
+                        buffers.append(data)
+                    else:
                         break
-                    buffers.append(data)
-                return "".join(buffers)
             else:
                 # Read until size bytes or EOF seen, whichever comes first
                 data = self._rbuf
@@ -1094,7 +1054,8 @@ else:
                         buffers[-1] = data[:left]
                         break
                     buf_len += n
-                return "".join(buffers)
+
+            return "".join(buffers)
 
         def readline(self, size= -1):
             data = self._rbuf
@@ -1130,7 +1091,6 @@ else:
                         self._rbuf = data[nl:]
                         buffers[-1] = data[:nl]
                         break
-                return "".join(buffers)
             else:
                 # Read until size bytes or \n or EOF seen, whichever comes first
                 nl = data.find('\n', 0, size)
@@ -1164,7 +1124,8 @@ else:
                         buffers[-1] = data[:left]
                         break
                     buf_len += n
-                return "".join(buffers)
+
+            return "".join(buffers)
 
 
 class HTTPConnection(object):
@@ -1261,7 +1222,7 @@ class HTTPConnection(object):
     def close(self):
         """Close the socket underlying this connection."""
         self.rfile.close()
-        
+
         if not self.linger:
             # Python's socket module does NOT call close on the kernel socket
             # when you call socket.close(). We do so manually here because we
@@ -1271,14 +1232,6 @@ class HTTPConnection(object):
             if hasattr(self.socket, '_sock'):
                 self.socket._sock.close()
             self.socket.close()
-        else:
-            # On the other hand, sometimes we want to hang around for a bit
-            # to make sure the client has a chance to read our entire
-            # response. Skipping the close() calls here delays the FIN
-            # packet until the socket object is garbage-collected later.
-            # Someday, perhaps, we'll do the full lingering_close that
-            # Apache does, but not today.
-            pass
 
 
 def format_exc(limit=None):
@@ -1348,10 +1301,10 @@ class ThreadPool(object):
     
     def start(self):
         """Start the pool of threads."""
-        for i in range(self.min):
+        for _ in range(self.min):
             self._threads.append(WorkerThread(self.server))
         for worker in self._threads:
-            worker.setName("CP Server " + worker.getName())
+            worker.setName(f"CP Server {worker.getName()}")
             worker.start()
         for worker in self._threads:
             while not worker.ready:
@@ -1369,11 +1322,11 @@ class ThreadPool(object):
     
     def grow(self, amount):
         """Spawn new worker threads (not above self.max)."""
-        for i in range(amount):
+        for _ in range(amount):
             if self.max > 0 and len(self._threads) >= self.max:
                 break
             worker = WorkerThread(self.server)
-            worker.setName("CP Server " + worker.getName())
+            worker.setName(f"CP Server {worker.getName()}")
             self._threads.append(worker)
             worker.start()
     
@@ -1385,9 +1338,9 @@ class ThreadPool(object):
             if not t.isAlive():
                 self._threads.remove(t)
                 amount -= 1
-        
+
         if amount > 0:
-            for i in range(min(amount, len(self._threads) - self.min)):
+            for _ in range(min(amount, len(self._threads) - self.min)):
                 # Put a number of shutdown requests on the queue equal
                 # to 'amount'. Once each of those is processed by a worker,
                 # that worker will terminate and be culled from our list
@@ -1827,7 +1780,7 @@ def get_ssl_adapter_class(name='pyopenssl'):
         last_dot = adapter.rfind(".")
         attr_name = adapter[last_dot + 1:]
         mod_path = adapter[:last_dot]
-        
+
         try:
             mod = sys.modules[mod_path]
             if mod is None:
@@ -1835,14 +1788,13 @@ def get_ssl_adapter_class(name='pyopenssl'):
         except KeyError:
             # The last [''] is important.
             mod = __import__(mod_path, globals(), locals(), [''])
-        
+
         # Let an AttributeError propagate outward.
         try:
             adapter = getattr(mod, attr_name)
         except AttributeError:
-            raise AttributeError("'%s' object has no attribute '%s'"
-                                 % (mod_path, attr_name))
-    
+            raise AttributeError(f"'{mod_path}' object has no attribute '{attr_name}'")
+
     return adapter
 
 # -------------------------------- WSGI Stuff -------------------------------- #
@@ -1953,19 +1905,15 @@ class WSGIGateway_10(WSGIGateway):
         """Return a new environ dict targeting the given wsgi.version"""
         req = self.req
         env = {
-            # set a non-standard environ entry so the WSGI app can know what
-            # the *real* server protocol is (and what features to support).
-            # See http://www.faqs.org/rfcs/rfc2145.html.
             'ACTUAL_SERVER_PROTOCOL': req.server.protocol,
             'PATH_INFO': req.path,
             'QUERY_STRING': req.qs,
             'REMOTE_ADDR': req.conn.remote_addr or '',
-            'REMOTE_PORT': str(req.conn.remote_port or ''),
+            'REMOTE_PORT': str((req.conn.remote_port or '')),
             'REQUEST_METHOD': req.method,
             'REQUEST_URI': req.uri,
             'SCRIPT_NAME': '',
             'SERVER_NAME': req.server.server_name,
-            # Bah. "SERVER_PROTOCOL" is actually the REQUEST protocol.
             'SERVER_PROTOCOL': req.request_protocol,
             'wsgi.errors': sys.stderr,
             'wsgi.input': req.rfile,
@@ -1974,15 +1922,11 @@ class WSGIGateway_10(WSGIGateway):
             'wsgi.run_once': False,
             'wsgi.url_scheme': req.scheme,
             'wsgi.version': (1, 0),
-            }
-        
-        if isinstance(req.server.bind_addr, basestring):
-            # AF_UNIX. This isn't really allowed by WSGI, which doesn't
-            # address unix domain sockets. But it's better than nothing.
-            env["SERVER_PORT"] = ""
-        else:
-            env["SERVER_PORT"] = str(req.server.bind_addr[1])
-        
+            "SERVER_PORT": ""
+            if isinstance(req.server.bind_addr, basestring)
+            else str(req.server.bind_addr[1]),
+        }
+
         # CONTENT_TYPE/CONTENT_LENGTH
         for k, v in req.inheaders.iteritems():
             env["HTTP_" + k.upper().replace("-", "_")] = v
@@ -1992,10 +1936,10 @@ class WSGIGateway_10(WSGIGateway):
         cl = env.pop("HTTP_CONTENT_LENGTH", None)
         if cl is not None:
             env["CONTENT_LENGTH"] = cl
-        
+
         if req.conn.ssl_env:
             env.update(req.conn.ssl_env)
-        
+
         return env
 
 
@@ -2063,12 +2007,12 @@ class WSGIPathInfoDispatcher(object):
         path = environ["PATH_INFO"] or "/"
         for p, app in self.apps:
             # The apps list should be sorted by length, descending.
-            if path.startswith(p + "/") or path == p:
+            if path.startswith(f"{p}/") or path == p:
                 environ = environ.copy()
                 environ["SCRIPT_NAME"] = environ["SCRIPT_NAME"] + p
                 environ["PATH_INFO"] = path[len(p):]
                 return app(environ, start_response)
-        
+
         start_response('404 Not Found', [('Content-Type', 'text/plain'),
                                          ('Content-Length', '0')])
         return ['']

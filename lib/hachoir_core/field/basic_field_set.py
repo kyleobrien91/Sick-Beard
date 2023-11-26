@@ -62,7 +62,7 @@ class BasicFieldSet(Field):
         # Sanity checks (post-conditions)
         assert self.endian in (BIG_ENDIAN, LITTLE_ENDIAN)
         if (self._size is not None) and (self._size <= 0):
-            raise ParserError("Invalid parser '%s' size: %s" % (self.path, self._size))
+            raise ParserError(f"Invalid parser '{self.path}' size: {self._size}")
 
     def reset(self):
         self._field_array_count = {}
@@ -125,10 +125,7 @@ class BasicFieldSet(Field):
         Returns number of new added fields.
         """
         number = number - self.current_length
-        if 0 < number:
-            return self.readMoreFields(number)
-        else:
-            return 0
+        return self.readMoreFields(number) if number > 0 else 0
 
     def createFields(self):
         raise NotImplementedError()

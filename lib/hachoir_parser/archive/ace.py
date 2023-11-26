@@ -135,7 +135,7 @@ def fileBody(self):
         yield RawBytes(self, "compressed_data", size, "Compressed data")
 
 def fileDesc(self):
-    return "File entry: %s (%s)" % (self["filename"].value, self["compressed_size"].display)
+    return f'File entry: {self["filename"].value} ({self["compressed_size"].display})'
 
 def recoveryHeader(self):
     yield filesizeHandler(UInt32(self, "rec_blk_size", "Size of recovery data"))
@@ -225,25 +225,21 @@ class Block(FieldSet):
         yield UInt8(self, "block_type", "Block type")
 
         # Flags
-        for flag in self.parseFlags(self):
-            yield flag
-
+        yield from self.parseFlags(self)
         # Rest of the header
-        for field in self.parseHeader(self):
-            yield field
+        yield from self.parseHeader(self)
         size = self["head_size"].value - (self.current_size//8) + (2+2)
         if size > 0:
             yield RawBytes(self, "extra_data", size, "Extra header data, unhandled")
 
         # Body in itself
-        for field in self.parseBody(self):
-            yield field
+        yield from self.parseBody(self)
 
     def createDescription(self):
         if self.desc_func:
             return self.desc_func(self)
         else:
-            return "Block: %s" % self["type"].display
+            return f'Block: {self["type"].display}'
 
 class AceFile(Parser):
     endian = LITTLE_ENDIAN

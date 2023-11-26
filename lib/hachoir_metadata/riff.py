@@ -25,17 +25,16 @@ class RiffMetadata(MultipleMetadata):
 
     def extract(self, riff):
         type = riff["type"].value
-        if type == "WAVE":
-            self.extractWAVE(riff)
-            size = getValue(riff, "audio_data/size")
-            if size:
-                computeAudioComprRate(self, size*8)
+        if type == "ACON":
+            self.extractAnim(riff)
         elif type == "AVI ":
             if "headers" in riff:
                 self.extractAVI(riff["headers"])
                 self.extractInfo(riff["headers"])
-        elif type == "ACON":
-            self.extractAnim(riff)
+        elif type == "WAVE":
+            self.extractWAVE(riff)
+            if size := getValue(riff, "audio_data/size"):
+                computeAudioComprRate(self, size*8)
         if "info" in riff:
             self.extractInfo(riff["info"])
 
@@ -45,7 +44,7 @@ class RiffMetadata(MultipleMetadata):
         value = chunk["text"].value
         tag = chunk["tag"].value
         if tag not in self.TAG_TO_KEY:
-            self.warning("Skip RIFF metadata %s: %s" % (tag, value))
+            self.warning(f"Skip RIFF metadata {tag}: {value}")
             return
         key = self.TAG_TO_KEY[tag]
         setattr(self, key, value)
@@ -60,15 +59,14 @@ class RiffMetadata(MultipleMetadata):
         self.sample_rate = format["sample_per_sec"].value
 
         self.compression = format["codec"].display
-        if "nb_sample/nb_sample" in wav \
-        and 0 < format["sample_per_sec"].value:
+        if "nb_sample/nb_sample" in wav and format["sample_per_sec"].value > 0:
             self.duration = timedelta(seconds=float(wav["nb_sample/nb_sample"].value) / format["sample_per_sec"].value)
         if format["codec"].value in UNCOMPRESSED_AUDIO:
             # Codec with fixed bit rate
             self.bit_rate = format["nb_channel"].value * format["bit_per_sample"].value * format["sample_per_sec"].value
             if not self.has("duration") \
-            and "audio_data/size" in wav \
-            and self.has("bit_rate"):
+                and "audio_data/size" in wav \
+                and self.has("bit_rate"):
                 duration = float(wav["audio_data/size"].value)*8 / self.get('bit_rate')
                 self.duration = timedelta(seconds=duration)
 
@@ -85,11 +83,11 @@ class RiffMetadata(MultipleMetadata):
     @fault_tolerant
     def extractAVIVideo(self, header, meta):
         meta.compression = "%s (fourcc:\"%s\")" \
-            % (header["fourcc"].display, makeUnicode(header["fourcc"].value))
+                % (header["fourcc"].display, makeUnicode(header["fourcc"].value))
         if header["rate"].value and header["scale"].value:
             fps = float(header["rate"].value) / header["scale"].value
             meta.frame_rate = fps
-            if 0 < fps:
+            if fps > 0:
                 self.duration = meta.duration = timedelta(seconds=float(header["length"].value) / fps)
 
         if "../stream_fmt/width" in header:
@@ -126,15 +124,18 @@ class RiffMetadata(MultipleMetadata):
         uncompr = meta.get('bit_rate', 0)
         if not uncompr:
             return
-        compr = meta.get('nb_channel') * meta.get('sample_rate') * meta.get('bits_per_sample', default=16)
-        if not compr:
+        if (
+            compr := meta.get('nb_channel')
+            * meta.get('sample_rate')
+            * meta.get('bits_per_sample', default=16)
+        ):
+            meta.compr_rate = float(compr) / uncompr
+        else:
             return
-        meta.compr_rate = float(compr) / uncompr
 
     @fault_tolerant
     def useAviHeader(self, header):
-        microsec = header["microsec_per_frame"].value
-        if microsec:
+        if microsec := header["microsec_per_frame"].value:
             self.frame_rate = 1000000.0 / microsec
             total_frame = getValue(header, "total_frame")
             if total_frame and not self.has("duration"):
@@ -148,17 +149,17 @@ class RiffMetadata(MultipleMetadata):
             if "stream_hdr/stream_type" not in stream:
                 continue
             stream_type = stream["stream_hdr/stream_type"].value
-            if stream_type == "vids":
-                if "stream_hdr" in stream:
-                    meta = Metadata(self)
-                    self.extractAVIVideo(stream["stream_hdr"], meta)
-                    self.addGroup("video", meta, "Video stream")
-            elif stream_type == "auds":
+            if stream_type == "auds":
                 if "stream_fmt" in stream:
                     meta = Metadata(self)
                     self.extractAVIAudio(stream["stream_fmt"], meta)
                     self.addGroup("audio[%u]" % audio_index, meta, "Audio stream")
                     audio_index += 1
+            elif stream_type == "vids":
+                if "stream_hdr" in stream:
+                    meta = Metadata(self)
+                    self.extractAVIVideo(stream["stream_hdr"], meta)
+                    self.addGroup("video", meta, "Video stream")
         if "avi_hdr" in headers:
             self.useAviHeader(headers["avi_hdr"])
 
@@ -169,7 +170,7 @@ class RiffMetadata(MultipleMetadata):
         # Video has index?
         if "/index" in headers:
             self.comment = _("Has audio/video index (%s)") \
-                % humanFilesize(headers["/index"].size/8)
+                    % humanFilesize(headers["/index"].size/8)
 
     @fault_tolerant
     def extractAnim(self, riff):
@@ -178,7 +179,7 @@ class RiffMetadata(MultipleMetadata):
             total = 0
             for rate in riff.array("anim_rate/rate"):
                 count += 1
-                if 100 < count:
+                if count > 100:
                     break
                 total += rate.value / 60.0
             if count and total:

@@ -45,10 +45,10 @@ class AntiStampedeCache(dict):
                 if debug:
                     cherrypy.log('No timeout', 'TOOLS.CACHING')
                 return None
-            
+
             # Wait until it's done or times out.
             if debug:
-                cherrypy.log('Waiting up to %s seconds' % timeout, 'TOOLS.CACHING')
+                cherrypy.log(f'Waiting up to {timeout} seconds', 'TOOLS.CACHING')
             value.wait(timeout)
             if value.result is not None:
                 # The other thread finished its calculation. Use it.
@@ -62,7 +62,7 @@ class AntiStampedeCache(dict):
             e = threading.Event()
             e.result = None
             dict.__setitem__(self, key, e)
-            
+
             return None
         elif value is None:
             # Stick an Event in the slot so other threads wait
@@ -327,25 +327,24 @@ def tee_output():
     request = cherrypy.serving.request
     if 'no-store' in request.headers.values('Cache-Control'):
         return
-    
+
     def tee(body):
         """Tee response.body into a list."""
         if ('no-cache' in response.headers.values('Pragma') or
             'no-store' in response.headers.values('Cache-Control')):
-            for chunk in body:
-                yield chunk
+            yield from body
             return
-        
+
         output = []
         for chunk in body:
             output.append(chunk)
             yield chunk
-        
+
         # save the cache data
         body = ''.join(output)
         cherrypy._cache.put((response.status, response.headers or {},
                              body, response.time), len(body))
-    
+
     response = cherrypy.serving.response
     response.body = tee(response.body)
 
@@ -369,7 +368,7 @@ def expires(secs=0, force=False, debug=False):
     
     response = cherrypy.serving.response
     headers = response.headers
-    
+
     cacheable = False
     if not force:
         # some header names that indicate that the response can be cached
@@ -377,21 +376,20 @@ def expires(secs=0, force=False, debug=False):
             if indicator in headers:
                 cacheable = True
                 break
-    
-    if not cacheable and not force:
-        if debug:
-            cherrypy.log('request is not cacheable', 'TOOLS.EXPIRES')
-    else:
+
+    if not cacheable and not force and debug:
+        cherrypy.log('request is not cacheable', 'TOOLS.EXPIRES')
+    elif cacheable or force:
         if debug:
             cherrypy.log('request is cacheable', 'TOOLS.EXPIRES')
         if isinstance(secs, datetime.timedelta):
             secs = (86400 * secs.days) + secs.seconds
-        
+
         if secs == 0:
             if force or ("Pragma" not in headers):
                 headers["Pragma"] = "no-cache"
-            if cherrypy.serving.request.protocol >= (1, 1):
-                if force or "Cache-Control" not in headers:
+            if force or "Cache-Control" not in headers:
+                if cherrypy.serving.request.protocol >= (1, 1):
                     headers["Cache-Control"] = "no-cache, must-revalidate"
             # Set an explicit Expires date in the past.
             expiry = httputil.HTTPDate(1169942400.0)

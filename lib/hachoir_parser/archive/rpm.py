@@ -30,7 +30,7 @@ class ItemContent(FieldSet):
     def __init__(self, parent, name, item):
         FieldSet.__init__(self, parent, name, item.description)
         self.related_item = item
-        self._name = "content_%s" % item.name
+        self._name = f"content_{item.name}"
 
     def createFields(self):
         item = self.related_item
@@ -39,17 +39,11 @@ class ItemContent(FieldSet):
         cls = self.format_type[type]
         count = item["count"].value
         if cls is RawBytes: # or type == 8:
-            if cls is RawBytes:
-                args = (self, "value", count)
-            else:
-                args = (self, "value") # cls is CString
+            args = (self, "value", count)
             count = 1
         else:
-            if 1 < count:
-                args = (self, "value[]")
-            else:
-                args = (self, "value")
-        for index in xrange(count):
+            args = (self, "value[]") if count > 1 else (self, "value")
+        for _ in xrange(count):
             yield cls(*args)
 
 class Item(FieldSet):
@@ -94,7 +88,7 @@ class Item(FieldSet):
         yield UInt32(self, "count", "Count")
 
     def createDescription(self):
-        return "Item: %s (%s)" % (self["tag"].display, self["type"].display)
+        return f'Item: {self["tag"].display} ({self["type"].display})'
 
 class ItemHeader(Item):
     tag_name = {
@@ -197,7 +191,7 @@ class PropertySet(FieldSet):
 
         # Read item header
         items = []
-        for i in range(0, self["count"].value):
+        for _ in range(0, self["count"].value):
             item = ItemHeader(self, "item[]")
             yield item
             items.append(item)
@@ -210,11 +204,11 @@ class PropertySet(FieldSet):
         for item in items:
             offset = item["offset"].value
             diff = offset - (self.current_size/8 - start)
-            if 0 < diff:
+            if diff > 0:
                 yield NullBytes(self, "padding[]", diff)
             yield ItemContent(self, "content[]", item)
         size = start + self["size"].value - self.current_size/8
-        if 0 < size:
+        if size > 0:
             yield NullBytes(self, "padding[]", size)
 
 class RpmFile(Parser):
@@ -238,9 +232,7 @@ class RpmFile(Parser):
             return "Invalid signature"
         if self["major_ver"].value != 3:
             return "Unknown major version (%u)" % self["major_ver"].value
-        if self["type"].value not in self.TYPE_NAME:
-            return "Invalid RPM type"
-        return True
+        return "Invalid RPM type" if self["type"].value not in self.TYPE_NAME else True
 
     def createFields(self):
         yield Bytes(self, "signature", 4, r"RPM file signature (\xED\xAB\xEE\xDB)")
@@ -258,9 +250,8 @@ class RpmFile(Parser):
         if self._size is None: # TODO: is it possible to handle piped input?
             raise NotImplementedError
 
-        size = (self._size - self.current_size) // 8
-        if size:
-            if 3 <= size and self.stream.readBytes(self.current_size, 3) == "BZh":
+        if size := (self._size - self.current_size) // 8:
+            if size >= 3 and self.stream.readBytes(self.current_size, 3) == "BZh":
                 yield SubFile(self, "content", size, "bzip2 content", parser=Bzip2Parser)
             else:
                 yield SubFile(self, "content", size, "gzip content", parser=GzipParser)

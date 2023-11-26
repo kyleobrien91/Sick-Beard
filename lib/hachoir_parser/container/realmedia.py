@@ -64,15 +64,15 @@ class LogicalFileInfo(FieldSet):
         yield UInt32(self, "size")
         yield UInt16(self, "obj_version")
         yield UInt16(self, "nb_physical_stream")
-        for index in xrange(self["nb_physical_stream"].value):
+        for _ in xrange(self["nb_physical_stream"].value):
             yield UInt16(self, "physical_stream[]")
-        for index in xrange(self["nb_physical_stream"].value):
+        for _ in xrange(self["nb_physical_stream"].value):
             yield UInt16(self, "data_offset[]")
         yield UInt16(self, "nb_rule")
-        for index in xrange(self["nb_rule"].value):
+        for _ in xrange(self["nb_rule"].value):
             yield UInt16(self, "rule[]")
         yield UInt16(self, "nb_prop")
-        for index in xrange(self["nb_prop"].value):
+        for _ in xrange(self["nb_prop"].value):
             yield NameValueProperty(self, "prop[]")
 
 def parseMediaPropertiesHeader(self):
@@ -87,8 +87,7 @@ def parseMediaPropertiesHeader(self):
     yield PascalString8(self, "desc", "Stream description", charset="ISO-8859-1")
     yield PascalString8(self, "mime_type", "MIME type string", charset="ASCII")
     yield UInt32(self, "specific_size", "Size of type-specific data")
-    size = self['specific_size'].value
-    if size:
+    if size := self['specific_size'].value:
         if self["mime_type"].value == "logical-fileinfo":
             yield LogicalFileInfo(self, "file_info", size=size*8)
         else:
@@ -123,15 +122,12 @@ class Chunk(FieldSet):
         yield UInt16(self, "version", "Chunk Version")
 
         if self.parse_func:
-            for field in self.parse_func(self):
-                yield field
-        else:
-            size = (self.size - self.current_size) // 8
-            if size:
-                yield RawBytes(self, "raw", size)
+            yield from self.parse_func(self)
+        elif size := (self.size - self.current_size) // 8:
+            yield RawBytes(self, "raw", size)
 
     def createDescription(self):
-        return "Chunk: %s" % self["tag"].display
+        return f'Chunk: {self["tag"].display}'
 
 class RealMediaFile(Parser):
     MAGIC = '.RMF\0\0\0\x12\0\1'    # (magic, size=18, version=1)
@@ -157,7 +153,7 @@ class RealMediaFile(Parser):
         if self["header/size"].value != 18:
             return "Invalid header size"
         if self["header/version"].value not in (0, 1):
-            return "Unknown file format version (%s)" % self["header/version"].value
+            return f'Unknown file format version ({self["header/version"].value})'
         return True
 
     def createFields(self):
@@ -165,8 +161,12 @@ class RealMediaFile(Parser):
             yield Chunk(self, "chunk")
 
     def createMimeType(self):
-        for prop in self.array("stream_prop"):
-            if prop["mime_type"].value == "video/x-pn-realvideo":
-                return u"video/x-pn-realvideo"
-        return u"audio/x-pn-realaudio"
+        return next(
+            (
+                u"video/x-pn-realvideo"
+                for prop in self.array("stream_prop")
+                if prop["mime_type"].value == "video/x-pn-realvideo"
+            ),
+            u"audio/x-pn-realaudio",
+        )
 

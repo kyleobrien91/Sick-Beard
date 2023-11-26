@@ -29,10 +29,8 @@ class ParserList(object):
         elif name == "id":
             if type(value) is not str or not self.ID_REGEX.match(value):
                 return "Invalid identifier: %r" % value
-            parser = self.bytag[name].get(value)
-            if parser:
-                return "Duplicate parser id: %s already used by %s" % \
-                    (value, parser[0].__name__)
+            if parser := self.bytag[name].get(value):
+                return f"Duplicate parser id: {value} already used by {parser[0].__name__}"
         # TODO: lists should be forbidden
         if isinstance(value, list):
             value = tuple(value)
@@ -53,17 +51,19 @@ class ParserList(object):
         mimes = tags.get("mime", ())
         if not isinstance(mimes, tuple):
             return "MIME type is not a tuple"
-        for mime in mimes:
-            if not isinstance(mime, unicode):
-                return "MIME type %r is not an unicode string" % mime
-
-        return ""
+        return next(
+            (
+                "MIME type %r is not an unicode string" % mime
+                for mime in mimes
+                if not isinstance(mime, unicode)
+            ),
+            "",
+        )
 
     def add(self, parser):
         tags = parser.getParserTags()
-        err = self.validParser(parser, tags)
-        if err:
-            error("Skip parser %s: %s" % (parser.__name__, err))
+        if err := self.validParser(parser, tags):
+            error(f"Skip parser {parser.__name__}: {err}")
             return
 
         _tags = []
@@ -72,7 +72,7 @@ class ParserList(object):
             if isinstance(tag, tuple):
                 _tags.append(tag)
             elif tag is not True:
-                error("[%s] %s" % (parser.__name__, tag))
+                error(f"[{parser.__name__}] {tag}")
                 return
 
         self.parser_list.append(parser)

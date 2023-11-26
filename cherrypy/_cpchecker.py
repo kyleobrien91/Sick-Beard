@@ -27,17 +27,18 @@ class Checker(object):
     
     def __call__(self):
         """Run all check_* methods."""
-        if self.on:
-            oldformatwarning = warnings.formatwarning
-            warnings.formatwarning = self.formatwarning
-            try:
-                for name in dir(self):
-                    if name.startswith("check_"):
-                        method = getattr(self, name)
-                        if method and callable(method):
-                            method()
-            finally:
-                warnings.formatwarning = oldformatwarning
+        if not self.on:
+            return
+        oldformatwarning = warnings.formatwarning
+        warnings.formatwarning = self.formatwarning
+        try:
+            for name in dir(self):
+                if name.startswith("check_"):
+                    method = getattr(self, name)
+                    if method and callable(method):
+                        method()
+        finally:
+            warnings.formatwarning = oldformatwarning
     
     def formatwarning(self, message, category, filename, lineno, line=None):
         """Function to format a warning."""
@@ -66,14 +67,16 @@ class Checker(object):
         for sn, app in cherrypy.tree.apps.iteritems():
             if not isinstance(app, cherrypy.Application):
                 continue
-            
+
             msg = []
             for section, entries in app.config.iteritems():
                 if section.startswith('/'):
                     for key, value in entries.iteritems():
-                        for n in ("engine.", "server.", "tree.", "checker."):
-                            if key.startswith(n):
-                                msg.append("[%s] %s = %s" % (section, key, value))
+                        msg.extend(
+                            f"[{section}] {key} = {value}"
+                            for n in ("engine.", "server.", "tree.", "checker.")
+                            if key.startswith(n)
+                        )
             if msg:
                 msg.insert(0,
                     "The application mounted at %r contains the following "
@@ -120,9 +123,9 @@ class Checker(object):
             request.app = app
             for section in app.config:
                 # get_resource will populate request.config
-                request.get_resource(section + "/dummy.html")
+                request.get_resource(f"{section}/dummy.html")
                 conf = request.config.get
-                
+
                 if conf("tools.staticdir.on", False):
                     msg = ""
                     root = conf("tools.staticdir.root")
@@ -141,20 +144,19 @@ class Checker(object):
                                     msg += ("\nIf you meant to serve the "
                                             "filesystem folder at %r, remove "
                                             "the leading slash from dir." % testdir)
+                        elif root:
+                            fulldir = os.path.join(root, dir)
+                            if not os.path.isabs(fulldir):
+                                msg = "%r is not an absolute path." % fulldir
+
                         else:
-                            if not root:
-                                msg = "dir is a relative path and no root provided."
-                            else:
-                                fulldir = os.path.join(root, dir)
-                                if not os.path.isabs(fulldir):
-                                    msg = "%r is not an absolute path." % fulldir
-                        
+                            msg = "dir is a relative path and no root provided."
                         if fulldir and not os.path.exists(fulldir):
                             if msg:
                                 msg += "\n"
                             msg += ("%r (root + dir) is not an existing "
                                     "filesystem path." % fulldir)
-                    
+
                     if msg:
                         warnings.warn("%s\nsection: [%s]\nroot: %r\ndir: %r"
                                       % (msg, section, root, dir))
@@ -191,13 +193,12 @@ class Checker(object):
                         warnings.warn("%r is deprecated. Use %r instead.\n"
                                       "section: [%s]" % 
                                       (k, self.deprecated[k], section))
-            else:
-                if section in self.obsolete:
-                    warnings.warn("%r is obsolete. Use %r instead."
-                                  % (section, self.obsolete[section]))
-                elif section in self.deprecated:
-                    warnings.warn("%r is deprecated. Use %r instead."
-                                  % (section, self.deprecated[section]))
+            elif section in self.obsolete:
+                warnings.warn("%r is obsolete. Use %r instead."
+                              % (section, self.obsolete[section]))
+            elif section in self.deprecated:
+                warnings.warn("%r is deprecated. Use %r instead."
+                              % (section, self.deprecated[section]))
     
     def check_compatibility(self):
         """Process config and warn on each obsolete or deprecated entry."""
@@ -263,7 +264,7 @@ class Checker(object):
         import __builtin__ as builtins
         b = [x for x in vars(builtins).values()
              if type(x) is type(str)]
-        
+
         def traverse(obj, namespace):
             for name in dir(obj):
                 # Hack for 3.2's warning about body_params
@@ -271,8 +272,8 @@ class Checker(object):
                     continue
                 vtype = type(getattr(obj, name, None))
                 if vtype in b:
-                    self.known_config_types[namespace + "." + name] = vtype
-        
+                    self.known_config_types[f"{namespace}.{name}"] = vtype
+
         traverse(cherrypy.request, "request")
         traverse(cherrypy.response, "response")
         traverse(cherrypy.server, "server")

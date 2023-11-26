@@ -49,7 +49,7 @@ class ChunkIndexer:
             offset = self.chunks[index].offset
             if offset < new_chunk.offset:
                 if not self.canHouse(new_chunk, index):
-                    raise ParserError("Chunk '%s' doesn't fit!" % new_chunk.name)
+                    raise ParserError(f"Chunk '{new_chunk.name}' doesn't fit!")
                 self.chunks.insert(index, new_chunk)
                 return
             index += 1
@@ -67,7 +67,7 @@ class ChunkIndexer:
             size = chunk.offset - current_pos
             if size > 0:
                 obj.info("Padding of %u bytes needed: curr=%u offset=%u" % \
-                         (size, current_pos, chunk.offset))
+                             (size, current_pos, chunk.offset))
                 yield PaddingBytes(obj, "padding[]", size)
                 current_pos = obj.current_size//8
 
@@ -78,21 +78,21 @@ class ChunkIndexer:
                 count += 1
                 chunk = self.chunks.pop()
                 # Unfortunaly, we also pass the underlying chunks
-                if chunk == None:
+                if chunk is None:
                     obj.info("Couldn't resynch: %u object skipped to reach %u" % \
-                             (count, current_pos))
+                                 (count, current_pos))
                     return
 
             # Resynch
             size = chunk.offset-current_pos
             if size > 0:
                 obj.info("Skipped %u objects to resynch to %u; chunk offset: %u->%u" % \
-                         (count, current_pos, old_off, chunk.offset))
+                             (count, current_pos, old_off, chunk.offset))
                 yield RawBytes(obj, "resynch[]", size)
 
             # Yield
             obj.info("Yielding element of size %u at offset %u" % \
-                     (chunk.size, chunk.offset))
+                         (chunk.size, chunk.offset))
             field = chunk.cls(obj, chunk.name, chunk.size, *chunk.args)
             # Not tested, probably wrong:
             #if chunk.size: field.static_size = 8*chunk.size
@@ -101,7 +101,7 @@ class ChunkIndexer:
             if hasattr(field, "getSubChunks"):
                 for sub_chunk in field.getSubChunks():
                     obj.info("Adding sub chunk: position=%u size=%u name='%s'" % \
-                             (sub_chunk.offset, sub_chunk.size, sub_chunk.name))
+                                 (sub_chunk.offset, sub_chunk.size, sub_chunk.name))
                     self.addChunk(sub_chunk)
 
             # Let missing padding be done by next chunk
@@ -165,7 +165,7 @@ class SizeFieldSet(FieldSet):
         FieldSet.__init__(self, parent, name, desc)
         if size:
             self.real_size = size
-            if self.static_size == None:
+            if self.static_size is None:
                 self.setCheckedSizes(size)
 
     def setCheckedSizes(self, size):
@@ -183,8 +183,7 @@ class SizeFieldSet(FieldSet):
         self._size = size
 
     def createFields(self):
-        for field in self.createUnpaddedFields():
-            yield field
+        yield from self.createUnpaddedFields()
         size = (self._size - self.current_size)//8
         if size > 0:
             yield PaddingBytes(self, "padding", size)
@@ -203,27 +202,21 @@ class Header(SizeFieldSet):
     def createUnpaddedFields(self):
         yield String(self, "title", 28, strip='\0')
         yield textHandler(UInt8(self, "marker[]"), hexadecimal)
-        for field in self.getFileVersionField():
-            yield field
-
+        yield from self.getFileVersionField()
         yield UInt16(self, "num_orders")
         yield UInt16(self, "num_instruments")
         yield UInt16(self, "num_patterns")
 
-        for field in self.getFirstProperties():
-            yield field
+        yield from self.getFirstProperties()
         yield String(self, "marker[]", 4)
-        for field in self.getLastProperties():
-            yield field
-
+        yield from self.getLastProperties()
         yield GenericVector(self, "channel_settings", 32,
                             ChannelSettings, "channel")
 
         # Orders
         yield GenericVector(self, "orders", self.getNumOrders(), UInt8, "order")
 
-        for field in self.getHeaderEndFields():
-            yield field
+        yield from self.getHeaderEndFields()
 
 class S3MHeader(Header):
     """
@@ -326,9 +319,9 @@ class PTMHeader(Header):
     # static_size should prime over _size, right?
     static_size = 8*608
 
-    def getTrackerVersion(val):
-        val = val.value
-        return "ProTracker x%04X" % val
+    def getTrackerVersion(self):
+        self = self.value
+        return "ProTracker x%04X" % self
 
     def getFileVersionField(self):
         yield UInt16(self, "type")
@@ -418,9 +411,7 @@ class Instrument(SizeFieldSet):
         yield self.getType()
         yield String(self, "filename", 12, strip='\0')
 
-        for field in self.getInstrumentFields():
-            yield field
-
+        yield from self.getInstrumentFields()
         yield String(self, "name", 28, strip='\0')
         yield String(self, "marker", 4, "Either 'SCRS' or '(empty)'", strip='\0')
 
@@ -525,9 +516,7 @@ class PTMInstrument(Instrument):
         yield UInt8(self, "reserved[]") # Should be 0
 
     def getSubChunks(self):
-        # Samples are NOT padded, and the size is already the correct one
-        size = self["sample_size"].value
-        if size:
+        if size := self["sample_size"].value:
             yield Chunk(PTMSampleData, "sample_data[]", self["sample_offset"].value, size)
 
 
@@ -622,7 +611,7 @@ class Module(Parser):
             return "Invalid start marker %u" % marker
         marker = self.stream.readBytes(0x2C*8, 4)
         if marker != self.MARKER:
-            return "Invalid marker %s!=%s" % (marker, self.MARKER)
+            return f"Invalid marker {marker}!={self.MARKER}"
         return True
 
     def createFields(self):
@@ -630,8 +619,7 @@ class Module(Parser):
         indexer = ChunkIndexer()
         # Add header - at least 0x50 bytes
         indexer.addChunk(Chunk(self.HEADER, "header", 0, 0x50))
-        for field in indexer.yieldChunks(self):
-            yield field
+        yield from indexer.yieldChunks(self)
 
 
 class S3MModule(Module):

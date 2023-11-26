@@ -38,30 +38,30 @@ class ServerAdapter(object):
             on_what = "unknown interface (dynamic?)"
         elif isinstance(self.bind_addr, tuple):
             host, port = self.bind_addr
-            on_what = "%s:%s" % (host, port)
+            on_what = f"{host}:{port}"
         else:
-            on_what = "socket file: %s" % self.bind_addr
-        
+            on_what = f"socket file: {self.bind_addr}"
+
         if self.running:
-            self.bus.log("Already serving on %s" % on_what)
+            self.bus.log(f"Already serving on {on_what}")
             return
-        
+
         self.interrupt = None
         if not self.httpserver:
             raise ValueError("No HTTP server has been created.")
-        
+
         # Start the httpserver in a new thread.
         if isinstance(self.bind_addr, tuple):
             wait_for_free_port(*self.bind_addr)
-        
+
         import threading
         t = threading.Thread(target=self._start_http_thread)
-        t.setName("HTTPServer " + t.getName())
+        t.setName(f"HTTPServer {t.getName()}")
         t.start()
-        
+
         self.wait()
         self.running = True
-        self.bus.log("Serving on %s" % on_what)
+        self.bus.log(f"Serving on {on_what}")
     start.priority = 75
     
     def _start_http_thread(self):
@@ -111,9 +111,9 @@ class ServerAdapter(object):
             if isinstance(self.bind_addr, tuple):
                 wait_for_free_port(*self.bind_addr)
             self.running = False
-            self.bus.log("HTTP Server %s shut down" % self.httpserver)
+            self.bus.log(f"HTTP Server {self.httpserver} shut down")
         else:
-            self.bus.log("HTTP Server %s already shut down" % self.httpserver)
+            self.bus.log(f"HTTP Server {self.httpserver} already shut down")
     stop.priority = 25
     
     def restart(self):
@@ -208,20 +208,16 @@ def client_host(server_host):
     if server_host == '0.0.0.0':
         # 0.0.0.0 is INADDR_ANY, which should answer on localhost.
         return '127.0.0.1'
-    if server_host == '::':
-        # :: is IN6ADDR_ANY, which should answer on localhost.
-        return '::1'
-    return server_host
+    return '::1' if server_host == '::' else server_host
 
 def check_port(host, port, timeout=1.0):
     """Raise an error if the given port is not free on the given host."""
     if not host:
         raise ValueError("Host values of '' or None are not allowed.")
     host = client_host(host)
-    port = int(port)
-    
     import socket
-    
+
+    port = int(port)
     # AF_INET or AF_INET6 socket
     # Get the correct address family for our host (allows IPv6 addresses)
     try:
@@ -232,7 +228,7 @@ def check_port(host, port, timeout=1.0):
             info = [(socket.AF_INET6, socket.SOCK_STREAM, 0, "", (host, port, 0, 0))]
         else:
             info = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (host, port))]
-    
+
     for res in info:
         af, socktype, proto, canonname, sa = res
         s = None
@@ -243,9 +239,9 @@ def check_port(host, port, timeout=1.0):
             s.settimeout(timeout)
             s.connect((host, port))
             s.close()
-            raise IOError("Port %s is in use on %s; perhaps the previous "
-                          "httpserver did not shut down properly." % 
-                          (repr(port), repr(host)))
+            raise IOError(
+                f"Port {repr(port)} is in use on {repr(host)}; perhaps the previous httpserver did not shut down properly."
+            )
         except socket.error:
             if s:
                 s.close()
@@ -254,8 +250,8 @@ def wait_for_free_port(host, port):
     """Wait for the specified port to become free (drop requests)."""
     if not host:
         raise ValueError("Host values of '' or None are not allowed.")
-    
-    for trial in range(50):
+
+    for _ in range(50):
         try:
             # we are expecting a free port, so reduce the timeout
             check_port(host, port, timeout=0.1)
@@ -264,20 +260,20 @@ def wait_for_free_port(host, port):
             time.sleep(0.1)
         else:
             return
-    
+
     raise IOError("Port %r not free on %r" % (port, host))
 
 def wait_for_occupied_port(host, port):
     """Wait for the specified port to become active (receive requests)."""
     if not host:
         raise ValueError("Host values of '' or None are not allowed.")
-    
-    for trial in range(50):
+
+    for _ in range(50):
         try:
             check_port(host, port)
         except IOError:
             return
         else:
             time.sleep(.1)
-    
+
     raise IOError("Port %r not bound on %r" % (port, host))

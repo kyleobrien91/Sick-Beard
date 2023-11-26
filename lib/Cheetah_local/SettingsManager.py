@@ -40,23 +40,20 @@ def stringIsNumber(S):
     This also works for complex numbers and numbers with +/- in front."""
 
     S = S.strip()
-    
+
     if S[0] in '-+' and len(S) > 1:
         S = S[1:].strip()
-    
+
     match = complexNumberRE.match(S)
     if not match:
         match = numberRE.match(S)
-    if not match or (match.end() != len(S)):
-        return False
-    else:
-        return True
+    return bool(match and match.end() == len(S))
         
 def convStringToNum(theString):
     """Convert a string representation of a Python number to the Python version"""
     
     if not stringIsNumber(theString):
-        raise Error(theString + ' cannot be converted to a Python number')
+        raise Error(f'{theString} cannot be converted to a Python number')
     return eval(theString, {}, {})
 
 
@@ -98,11 +95,9 @@ class _SettingsCollector(object):
     def readSettingsFromPySrcStr(self, theString):
         """Return a dictionary of the settings in a Python src string."""
 
-        globalsDict = {'True': (1==1),
-                       'False': (0==1),
-                       }
+        globalsDict = {'True': True, 'False': 0==1}
         newSettings = {'self':self}
-        exec((theString+os.linesep), globalsDict, newSettings)        
+        exec((theString+os.linesep), globalsDict, newSettings)
         del newSettings['self']
         module = types.ModuleType('temp_settings_module')
         module.__dict__.update(newSettings)
@@ -143,7 +138,7 @@ class _SettingsCollector(object):
 
         sects = p.sections()
         newSettings = {}
-        
+
         for s in sects:
             newSettings[s] = {}
             for o in p.options(s):
@@ -166,7 +161,7 @@ class _SettingsCollector(object):
                         subDict[key] = False
                     if stringIsNumber(val):
                         subDict[key] = convStringToNum(val)
-                        
+
                 ## now deal with any 'importSettings' commands
                 if key.lower() == 'importsettings':
                     if val.find(';') < 0:
@@ -175,15 +170,15 @@ class _SettingsCollector(object):
                         path = val.split(';')[0]
                         rest = ''.join(val.split(';')[1:]).strip()
                         parentDict = self.readSettingsFromPySrcFile(path)
-                        importedSettings = eval('parentDict["' + rest + '"]')
-                        
+                        importedSettings = eval(f'parentDict["{rest}"]')
+
                     subDict.update(mergeNestedDictionaries(subDict,
                                                            importedSettings))
-                        
+
             if sect.lower() == 'globals':
                 newSettings.update(newSettings[sect])
                 del newSettings[sect]
-                
+
         return newSettings
 
 

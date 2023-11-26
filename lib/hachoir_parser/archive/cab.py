@@ -33,7 +33,7 @@ class Folder(FieldSet):
         yield PaddingBits(self, "padding", 7)
 
     def createDescription(self):
-        text= "Folder: compression %s" % self["compr_method"].display
+        text = f'Folder: compression {self["compr_method"].display}'
         if self["compr_method"].value != COMPRESSION_NONE:
             text += " (level %u)" % self["compr_level"].value
         return text
@@ -48,14 +48,12 @@ class File(FieldSet):
         yield CString(self, "filename", charset="ASCII")
 
     def createDescription(self):
-        return "File %s (%s)" % (
-            self["filename"].display, self["filesize"].display)
+        return f'File {self["filename"].display} ({self["filesize"].display})'
 
 class Reserved(FieldSet):
     def createFields(self):
         yield UInt32(self, "size")
-        size = self["size"].value
-        if size:
+        if size := self["size"].value:
             yield RawBytes(self, "data", size)
 
 class Flags(FieldSet):
@@ -83,9 +81,9 @@ class CabFile(Parser):
         if self.stream.readBytes(0, 4) != self.MAGIC:
             return "Invalid magic"
         if self["cab_version"].value != 0x0103:
-            return "Unknown version (%s)" % self["cab_version"].display
+            return f'Unknown version ({self["cab_version"].display})'
         if not (1 <= self["nb_folder"].value <= MAX_NB_FOLDER):
-            return "Invalid number of folder (%s)" % self["nb_folder"].value
+            return f'Invalid number of folder ({self["nb_folder"].value})'
         return True
 
     def createFields(self):
@@ -111,13 +109,12 @@ class CabFile(Parser):
         #(6) Next disk name, if CAB_HEADER.flags & CAB_FLAG_HASNEXT
         # ----
 
-        for index in xrange(self["nb_folder"].value):
+        for _ in xrange(self["nb_folder"].value):
             yield Folder(self, "folder[]")
-        for index in xrange(self["nb_files"].value):
+        for _ in xrange(self["nb_files"].value):
             yield File(self, "file[]")
 
-        end = self.seekBit(self.size, "endraw")
-        if end:
+        if end := self.seekBit(self.size, "endraw"):
             yield end
 
     def createContentSize(self):

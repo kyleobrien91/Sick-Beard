@@ -64,7 +64,7 @@ class OutputStream(object):
                 return
 
         # Write byte per byte
-        while 8 <= count:
+        while count >= 8:
             count -= 8
             if endian is BIG_ENDIAN:
                 byte = (value >> count)
@@ -77,12 +77,9 @@ class OutputStream(object):
         # Keep last bits
         assert 0 <= count < 8
         self._bit_pos = count
-        if 0 < count:
+        if count > 0:
             assert 0 <= value < 2**count
-            if endian is BIG_ENDIAN:
-                self._byte = value << (8-count)
-            else:
-                self._byte = value
+            self._byte = value << (8-count) if endian is BIG_ENDIAN else value
         else:
             assert value == 0
             self._byte = 0
@@ -107,7 +104,7 @@ class OutputStream(object):
         if (address % 8):
             raise OutputStreamError("Unable to copy bytes with address with bit granularity")
         buffer_size = 1 << 12   # 8192 (8 KB)
-        while 0 < nb_bytes:
+        while nb_bytes > 0:
             # Compute buffer size
             if nb_bytes < buffer_size:
                 buffer_size = nb_bytes

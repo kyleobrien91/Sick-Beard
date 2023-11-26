@@ -57,9 +57,7 @@ def get_ha1_dict_plain(user_password_dict):
     """
     def get_ha1(realm, username):
         password = user_password_dict.get(username)
-        if password:
-            return md5_hex('%s:%s:%s' % (username, realm, password))
-        return None
+        return md5_hex(f'{username}:{realm}:{password}') if password else None
 
     return get_ha1
 
@@ -92,13 +90,12 @@ def get_ha1_file_htdigest(filename):
     """
     def get_ha1(realm, username):
         result = None
-        f = open(filename, 'r')
-        for line in f:
-            u, r, ha1 = line.rstrip().split(':')
-            if u == username and r == realm:
-                result = ha1
-                break
-        f.close()
+        with open(filename, 'r') as f:
+            for line in f:
+                u, r, ha1 = line.rstrip().split(':')
+                if u == username and r == realm:
+                    result = ha1
+                    break
         return result
 
     return get_ha1
@@ -115,9 +112,8 @@ def synthesize_nonce(s, key, timestamp=None):
     """
     if timestamp is None:
         timestamp = int(time.time())
-    h = md5_hex('%s:%s:%s' % (timestamp, s, key))
-    nonce = '%s:%s' % (timestamp, h)
-    return nonce
+    h = md5_hex(f'{timestamp}:{s}:{key}')
+    return f'{timestamp}:{h}'
 
 
 def H(s):
@@ -131,7 +127,7 @@ class HttpDigestAuthorization (object):
     """
 
     def errmsg(self, s):
-        return 'Digest Authorization header: %s' % s
+        return f'Digest Authorization header: {s}'
 
     def __init__(self, auth_header, http_method, debug=False):
         self.http_method = http_method
@@ -161,28 +157,29 @@ class HttpDigestAuthorization (object):
 
         # perform some correctness checks
         if self.algorithm not in valid_algorithms:
-            raise ValueError(self.errmsg("Unsupported value for algorithm: '%s'" % self.algorithm))
+            raise ValueError(
+                self.errmsg(f"Unsupported value for algorithm: '{self.algorithm}'")
+            )
 
         has_reqd = self.username and \
-                   self.realm and \
-                   self.nonce and \
-                   self.uri and \
-                   self.response
+                       self.realm and \
+                       self.nonce and \
+                       self.uri and \
+                       self.response
         if not has_reqd:
             raise ValueError(self.errmsg("Not all required parameters are present."))
 
         if self.qop:
             if self.qop not in valid_qops:
-                raise ValueError(self.errmsg("Unsupported value for qop: '%s'" % self.qop))
-            if not (self.cnonce and self.nc):
+                raise ValueError(self.errmsg(f"Unsupported value for qop: '{self.qop}'"))
+            if not self.cnonce or not self.nc:
                 raise ValueError(self.errmsg("If qop is sent then cnonce and nc MUST be present"))
-        else:
-            if self.cnonce or self.nc:
-                raise ValueError(self.errmsg("If qop is not sent, neither cnonce nor nc can be present"))
+        elif self.cnonce or self.nc:
+            raise ValueError(self.errmsg("If qop is not sent, neither cnonce nor nc can be present"))
 
 
     def __str__(self):
-        return 'authorization : %s' % self.auth_header
+        return f'authorization : {self.auth_header}'
 
     def validate_nonce(self, s, key):
         """Validate the nonce.
@@ -200,7 +197,7 @@ class HttpDigestAuthorization (object):
             s_timestamp, s_hashpart = synthesize_nonce(s, key, timestamp).split(':', 1)
             is_valid = s_hashpart == hashpart
             if self.debug:
-                TRACE('validate_nonce: %s' % is_valid)
+                TRACE(f'validate_nonce: {is_valid}')
             return is_valid
         except ValueError: # split() error
             pass
@@ -232,9 +229,9 @@ class HttpDigestAuthorization (object):
         # If the "qop" value is "auth-int", then A2 is:
         #    A2 = method ":" digest-uri-value ":" H(entity-body)
         if self.qop is None or self.qop == "auth":
-            a2 = '%s:%s' % (self.http_method, self.uri)
+            a2 = f'{self.http_method}:{self.uri}'
         elif self.qop == "auth-int":
-            a2 = "%s:%s:%s" % (self.http_method, self.uri, H(entity_body))
+            a2 = f"{self.http_method}:{self.uri}:{H(entity_body)}"
         else:
             # in theory, this should never happen, since I validate qop in __init__()
             raise ValueError(self.errmsg("Unrecognized value for qop!"))
@@ -257,9 +254,9 @@ class HttpDigestAuthorization (object):
         ha2 = self.HA2(entity_body)
         # Request-Digest -- RFC 2617 3.2.2.1
         if self.qop:
-            req = "%s:%s:%s:%s:%s" % (self.nonce, self.nc, self.cnonce, self.qop, ha2)
+            req = f"{self.nonce}:{self.nc}:{self.cnonce}:{self.qop}:{ha2}"
         else:
-            req = "%s:%s" % (self.nonce, ha2)
+            req = f"{self.nonce}:{ha2}"
 
         # RFC 2617 3.2.2.2
         #
@@ -272,24 +269,22 @@ class HttpDigestAuthorization (object):
         # A1 = H( unq(username-value) ":" unq(realm-value) ":" passwd )
         #         ":" unq(nonce-value) ":" unq(cnonce-value)
         if self.algorithm == 'MD5-sess':
-            ha1 = H('%s:%s:%s' % (ha1, self.nonce, self.cnonce))
+            ha1 = H(f'{ha1}:{self.nonce}:{self.cnonce}')
 
-        digest = H('%s:%s' % (ha1, req))
-        return digest
+        return H(f'{ha1}:{req}')
 
 
 
 def www_authenticate(realm, key, algorithm='MD5', nonce=None, qop=qop_auth, stale=False):
     """Constructs a WWW-Authenticate header for Digest authentication."""
     if qop not in valid_qops:
-        raise ValueError("Unsupported value for qop: '%s'" % qop)
+        raise ValueError(f"Unsupported value for qop: '{qop}'")
     if algorithm not in valid_algorithms:
-        raise ValueError("Unsupported value for algorithm: '%s'" % algorithm)
+        raise ValueError(f"Unsupported value for algorithm: '{algorithm}'")
 
     if nonce is None:
         nonce = synthesize_nonce(realm, key)
-    s = 'Digest realm="%s", nonce="%s", algorithm="%s", qop="%s"' % (
-                realm, nonce, algorithm, qop)
+    s = f'Digest realm="{realm}", nonce="{nonce}", algorithm="{algorithm}", qop="{qop}"'
     if stale:
         s += ', stale="true"'
     return s

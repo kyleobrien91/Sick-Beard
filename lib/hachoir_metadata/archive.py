@@ -10,9 +10,7 @@ from lib.hachoir_core.i18n import _
 def maxNbFile(meta):
     if meta.quality <= QUALITY_FASTEST:
         return 0
-    if QUALITY_BEST <= meta.quality:
-        return None
-    return 1 + int(10 * meta.quality)
+    return None if QUALITY_BEST <= meta.quality else 1 + int(10 * meta.quality)
 
 def computeCompressionRate(meta):
     """
@@ -21,10 +19,10 @@ def computeCompressionRate(meta):
     if not meta.has("file_size") \
     or not meta.get("compr_size", 0):
         return
-    file_size = meta.get("file_size")
-    if not file_size:
+    if file_size := meta.get("file_size"):
+        meta.compr_rate = float(file_size) / meta.get("compr_size")
+    else:
         return
-    meta.compr_rate = float(file_size) / meta.get("compr_size")
 
 class Bzip2Metadata(RootMetadata):
     def extract(self, zip):
@@ -54,7 +52,9 @@ class ZipMetadata(MultipleMetadata):
         max_nb = maxNbFile(self)
         for index, field in enumerate(zip.array("file")):
             if max_nb is not None and max_nb <= index:
-                self.warning("ZIP archive contains many files, but only first %s files are processed" % max_nb)
+                self.warning(
+                    f"ZIP archive contains many files, but only first {max_nb} files are processed"
+                )
                 break
             self.processFile(field)
 
@@ -80,7 +80,9 @@ class TarMetadata(MultipleMetadata):
         max_nb = maxNbFile(self)
         for index, field in enumerate(tar.array("file")):
             if max_nb is not None and max_nb <= index:
-                self.warning("TAR archive contains many files, but only first %s files are processed" % max_nb)
+                self.warning(
+                    f"TAR archive contains many files, but only first {max_nb} files are processed"
+                )
                 break
             meta = Metadata(self)
             self.extractFile(field, meta)
@@ -101,22 +103,23 @@ class TarMetadata(MultipleMetadata):
         except ValueError:
             pass
         meta.file_type = field["type"].display
-        meta.author = "%s (uid=%s), group %s (gid=%s)" %\
-            (field["uname"].value, field.getOctal("uid"),
-             field["gname"].value, field.getOctal("gid"))
+        meta.author = f'{field["uname"].value} (uid={field.getOctal("uid")}), group {field["gname"].value} (gid={field.getOctal("gid")})'
 
 
 class CabMetadata(MultipleMetadata):
     def extract(self, cab):
         if "folder[0]" in cab:
             self.useFolder(cab["folder[0]"])
-        self.format_version = "Microsoft Cabinet version %s" % cab["cab_version"].display
-        self.comment = "%s folders, %s files" % (
-            cab["nb_folder"].value, cab["nb_files"].value)
+        self.format_version = f'Microsoft Cabinet version {cab["cab_version"].display}'
+        self.comment = (
+            f'{cab["nb_folder"].value} folders, {cab["nb_files"].value} files'
+        )
         max_nb = maxNbFile(self)
         for index, field in enumerate(cab.array("file")):
             if max_nb is not None and max_nb <= index:
-                self.warning("CAB archive contains many files, but only first %s files are processed" % max_nb)
+                self.warning(
+                    f"CAB archive contains many files, but only first {max_nb} files are processed"
+                )
                 break
             self.useFile(field)
 
@@ -144,12 +147,14 @@ class CabMetadata(MultipleMetadata):
 
 class MarMetadata(MultipleMetadata):
     def extract(self, mar):
-        self.comment = "Contains %s files" % mar["nb_file"].value
-        self.format_version = "Microsoft Archive version %s" % mar["version"].value
+        self.comment = f'Contains {mar["nb_file"].value} files'
+        self.format_version = f'Microsoft Archive version {mar["version"].value}'
         max_nb = maxNbFile(self)
         for index, field in enumerate(mar.array("file")):
             if max_nb is not None and max_nb <= index:
-                self.warning("MAR archive contains many files, but only first %s files are processed" % max_nb)
+                self.warning(
+                    f"MAR archive contains many files, but only first {max_nb} files are processed"
+                )
                 break
             meta = Metadata(self)
             meta.filename = field["filename"].value

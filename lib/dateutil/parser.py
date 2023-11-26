@@ -139,8 +139,8 @@ class _timelex(object):
             raise StopIteration
         return token
 
-    def split(cls, s):
-        return list(cls(s))
+    def split(self, s):
+        return list(self(s))
     split = classmethod(split)
 
 
@@ -155,8 +155,8 @@ class _resultbase(object):
         for attr in self.__slots__:
             value = getattr(self, attr)
             if value is not None:
-                l.append("%s=%s" % (attr, `value`))
-        return "%s(%s)" % (classname, ", ".join(l))
+                l.append(f"{attr}=value")
+        return f'{classname}({", ".join(l)})'
 
     def __repr__(self):
         return self._repr(self.__class__.__name__)
@@ -261,9 +261,7 @@ class parserinfo(object):
         return name.lower() in self._utczone
 
     def tzoffset(self, name):
-        if name in self._utczone:
-            return 0
-        return self.TZOFFSET.get(name)
+        return 0 if name in self._utczone else self.TZOFFSET.get(name)
 
     def convertyear(self, year):
         if year < 100:

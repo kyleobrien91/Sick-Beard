@@ -29,16 +29,14 @@ def _getTerminalCharset():
     """
     # (1) Try locale.getpreferredencoding()
     try:
-        charset = locale.getpreferredencoding()
-        if charset:
+        if charset := locale.getpreferredencoding():
             return charset
     except (locale.Error, AttributeError):
         pass
 
     # (2) Try locale.nl_langinfo(CODESET)
     try:
-        charset = locale.nl_langinfo(locale.CODESET)
-        if charset:
+        if charset := locale.nl_langinfo(locale.CODESET):
             return charset
     except (locale.Error, AttributeError):
         pass
@@ -110,10 +108,7 @@ def _dummy_gettext(text):
     return unicode(text)
 
 def _dummy_ngettext(singular, plural, count):
-    if 1 < abs(count) or not count:
-        return unicode(plural)
-    else:
-        return unicode(singular)
+    return unicode(plural) if abs(count) > 1 or not count else unicode(singular)
 
 def _initGettext():
     charset = initLocale()
@@ -202,7 +197,7 @@ def guessBytesCharset(bytes, default=None):
         pass
 
     # Create a set of non-ASCII characters
-    non_ascii_set = set( byte for byte in bytes if ord(byte) >= 128 )
+    non_ascii_set = {byte for byte in bytes if ord(byte) >= 128}
     for characters, charset in CHARSET_CHARACTERS:
         if characters.issuperset(non_ascii_set):
             return charset

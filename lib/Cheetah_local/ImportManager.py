@@ -56,10 +56,11 @@ def _os_bootstrap():
             if a == '':
                 return b
             if ':' not in a:
-                a = ':' + a
+                a = f':{a}'
             if a[-1:] != ':':
-                a = a + ':'
+                a = f'{a}:'
             return a + b
+
     else:
         raise ImportError('no os specific module found')
 
@@ -68,18 +69,16 @@ def _os_bootstrap():
             if a == '':
                 return b
             lastchar = a[-1:]
-            if lastchar == '/' or lastchar == sep:
-                return a + b
-            return a + sep + b
+            return a + b if lastchar in ['/', sep] else a + sep + b
 
     if dirname is None:
         def dirname(a, sep=sep):
             for i in range(len(a)-1, -1, -1):
                 c = a[i]
-                if c == '/' or c == sep:
+                if c in ['/', sep]:
                     return a[:i]
             return ''
-    
+
     global _os_stat
     _os_stat = stat
 
@@ -88,7 +87,7 @@ def _os_bootstrap():
 
     global _os_path_dirname
     _os_path_dirname = dirname
-    
+
     global _os_getcwd
     _os_getcwd = getcwd
     
@@ -114,10 +113,7 @@ def nameSplit(s):
     return rslt
 
 def getPathExt(fnm):
-    for i in range(len(fnm)-1, -1, -1):
-        if fnm[i] == '.':
-            return fnm[i:]
-    return ''
+    return next((fnm[i:] for i in range(len(fnm)-1, -1, -1) if fnm[i] == '.'), '')
 
 def pathIsDir(pathname):
     "Local replacement for os.path.isdir()."
@@ -160,7 +156,7 @@ class DirOwner(Owner):
         if path == '':
             path = _os_getcwd()
         if not pathIsDir(path):
-            raise ValueError("%s is not a directory" % path)
+            raise ValueError(f"{path} is not a directory")
         Owner.__init__(self, path)
         
     def getmod(self, nm,
@@ -236,8 +232,7 @@ class BuiltinImportDirector(ImportDirector):
 
     def getmod(self, nm, isbuiltin=imp.is_builtin):
         if isbuiltin(nm):
-            mod = imp.load_module(nm, None, nm, ('', '', imp.C_BUILTIN))
-            return mod
+            return imp.load_module(nm, None, nm, ('', '', imp.C_BUILTIN))
         return None
 
 class FrozenImportDirector(ImportDirector):
@@ -251,7 +246,11 @@ class FrozenImportDirector(ImportDirector):
         if isFrozen(nm):
             mod = loadMod(nm, None, nm, ('', '', imp.PY_FROZEN))
             if hasattr(mod, '__path__'):
-                mod.__importsub__ = lambda name, pname=nm, owner=self: owner.getmod(pname+'.'+name)
+                mod.__importsub__ = (
+                    lambda name, pname=nm, owner=self: owner.getmod(
+                        f'{pname}.{name}'
+                    )
+                )
             return mod
         return None
 
@@ -290,8 +289,7 @@ class RegistryImportDirector(ImportDirector):
                     break
                 
     def getmod(self, nm):
-        stuff = self.map.get(nm)
-        if stuff:
+        if stuff := self.map.get(nm):
             fnm, desc = stuff
             fp = open(fnm, 'rb')
             mod = imp.load_module(nm, fp, fnm, desc)
@@ -303,18 +301,9 @@ class PathImportDirector(ImportDirector):
     """Directs imports of modules stored on the filesystem."""
 
     def __init__(self, pathlist=None, importers=None, ownertypes=None):
-        if pathlist is None:
-            self.path = sys.path
-        else:
-            self.path = pathlist
-        if ownertypes == None:
-            self._ownertypes = _globalOwnerTypes
-        else:
-            self._ownertypes = ownertypes
-        if importers:
-            self._shadowPath = importers
-        else:
-            self._shadowPath = {}
+        self.path = sys.path if pathlist is None else pathlist
+        self._ownertypes = _globalOwnerTypes if ownertypes is None else ownertypes
+        self._shadowPath = importers if importers else {}
         self._inMakeOwner = False
         self._building = {}
         
@@ -393,14 +382,11 @@ class ImportManager:
         _sys_modules_get = sys.modules.get
         contexts = [None]
         if globals:
-            importernm = globals.get('__name__', '')
-            if importernm:
+            if importernm := globals.get('__name__', ''):
                 if hasattr(_sys_modules_get(importernm), '__path__'):
                     contexts.insert(0, importernm)
-                else:
-                    pkgnm = packageName(importernm)
-                    if pkgnm:
-                        contexts.insert(0, pkgnm)
+                elif pkgnm := packageName(importernm):
+                    contexts.insert(0, pkgnm)
         # so contexts is [pkgnm, None] or just [None]
         # now break the name being imported up so we get:
         # a.b.c -> [a, b, c]
@@ -412,10 +398,7 @@ class ImportManager:
             for i in range(len(nmparts)):
                 nm = nmparts[i]
                 #print " importHook trying %s in %s" % (nm, ctx)
-                if ctx:
-                    fqname = ctx + '.' + nm
-                else:
-                    fqname = nm
+                fqname = f'{ctx}.{nm}' if ctx else nm
                 if threaded:
                     self._acquire()
                 mod = _sys_modules_get(fqname, UNTRIED)
@@ -432,17 +415,17 @@ class ImportManager:
                 i = i + 1
             if i:
                 break
-            
+
         if i<len(nmparts):
             if ctx and hasattr(sys.modules[ctx], nmparts[i]):
                 #print "importHook done with %s %s %s (case 1)" % (name, globals['__name__'], fromlist)
                 return sys.modules[nmparts[0]]
             del sys.modules[fqname]
-            raise ImportError("No module named %s" % fqname)
+            raise ImportError(f"No module named {fqname}")
         if fromlist is None: 
             #print "importHook done with %s %s %s (case 2)" % (name, globals['__name__'], fromlist)
             if context:
-                return sys.modules[context+'.'+nmparts[0]]
+                return sys.modules[f'{context}.{nmparts[0]}']
             return sys.modules[nmparts[0]]
         bottommod = sys.modules[ctx]
         if hasattr(bottommod, '__path__'):
@@ -455,15 +438,15 @@ class ImportManager:
                     if i >= len(fromlist):
                         break
                     nm = fromlist[i]
-                i = i + 1
+                i += 1
                 if not hasattr(bottommod, nm):
                     if self.threaded:
                         self._acquire()
-                    mod = self.doimport(nm, ctx, ctx+'.'+nm)
+                    mod = self.doimport(nm, ctx, f'{ctx}.{nm}')
                     if self.threaded:
                         self._release()
                     if not mod:
-                        raise ImportError("%s not found in %s" % (nm, ctx))
+                        raise ImportError(f"{nm} not found in {ctx}")
         #print "importHook done with %s %s %s (case 3)" % (name, globals['__name__'], fromlist)
         return bottommod
     
@@ -472,17 +455,16 @@ class ImportManager:
         #print "doimport(%s, %s, %s)" % (nm, parentnm, fqname)
         if parentnm:
             parent = sys.modules[parentnm]
-            if hasattr(parent, '__path__'):
-                importfunc = getattr(parent, '__importsub__', None)
-                if not importfunc:
-                    subimporter = PathImportDirector(parent.__path__)
-                    importfunc = parent.__importsub__ = subimporter.getmod
-                mod = importfunc(nm)
-                if mod:
-                    setattr(parent, nm, mod)
-            else:
+            if not hasattr(parent, '__path__'):
                 #print "..parent not a package"
                 return None
+            importfunc = getattr(parent, '__importsub__', None)
+            if not importfunc:
+                subimporter = PathImportDirector(parent.__path__)
+                importfunc = parent.__importsub__ = subimporter.getmod
+            mod = importfunc(nm)
+            if mod:
+                setattr(parent, nm, mod)
         else:
             # now we're dealing with an absolute import
             for director in self.metapath:

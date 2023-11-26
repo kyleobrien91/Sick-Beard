@@ -98,10 +98,7 @@ try:
     from __builtin__ import any
 except ImportError:
     def any(items):
-        for item in items:
-            if item:
-                return True
-        return False
+        return any(items)
 
 # ---all() from Python 2.5 ---
 try:
@@ -165,10 +162,7 @@ except ImportError:
         def reversed(data):
             if not isinstance(data, list):
                 data = list(data)
-            reversed_data = []
-            for index in xrange(len(data)-1, -1, -1):
-                reversed_data.append(data[index])
-            return reversed_data
+            return [data[index] for index in xrange(len(data)-1, -1, -1)]
 
 # --- sorted() from Python 2.4 ---
 try:

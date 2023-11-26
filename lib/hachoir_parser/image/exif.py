@@ -55,18 +55,15 @@ class BasicIFDEntry(FieldSet):
         yield Enum(textHandler(UInt16(self, "type", "Type"), hexadecimal), self.TYPE_NAME)
         yield UInt32(self, "count", "Count")
         if self["type"].value not in (self.TYPE_BYTE, self.TYPE_UNDEFINED) \
-        and  MAX_COUNT < self["count"].value:
-            raise ParserError("EXIF: Invalid count value (%s)" % self["count"].value)
+            and  MAX_COUNT < self["count"].value:
+            raise ParserError(f'EXIF: Invalid count value ({self["count"].value})')
         value_size, array_size = self.getSizes()
 
         # Get offset/value
         if not value_size:
             yield NullBytes(self, "padding", 4)
         elif value_size <= 32:
-            if 1 < array_size:
-                name = "value[]"
-            else:
-                name = "value"
+            name = "value[]" if array_size > 1 else "value"
             kw = {}
             cls = self.value_cls
             if cls is String:
@@ -77,7 +74,7 @@ class BasicIFDEntry(FieldSet):
                 args = (self, name, value_size/8, "Value")
             else:
                 args = (self, name, "Value")
-            for index in xrange(array_size):
+            for _ in xrange(array_size):
                 yield cls(*args, **kw)
 
             size = array_size * value_size
@@ -255,7 +252,7 @@ class ExifEntry(BasicIFDEntry):
     }
 
     def createDescription(self):
-        return "Entry: %s" % self["tag"].display
+        return f'Entry: {self["tag"].display}'
 
 def sortExifEntry(a,b):
     return int( a["offset"].value - b["offset"].value )
@@ -266,10 +263,7 @@ class ExifIFD(FieldSet):
         Seek to byte address relative to parent address.
         """
         padding = offset - (self.address + self.current_size)/8
-        if 0 < padding:
-            return createPaddingField(self, padding*8)
-        else:
-            return None
+        return createPaddingField(self, padding*8) if padding > 0 else None
 
     def createFields(self):
         offset_diff = 6
@@ -288,7 +282,7 @@ class ExifIFD(FieldSet):
             yield entry
             if entry["tag"].value in (ExifEntry.EXIF_IFD_POINTER, ExifEntry.OFFSET_JPEG_SOI):
                 next_chunk_offset = entry["value"].value + offset_diff
-            if 32 < entry.getSizes()[0]:
+            if entry.getSizes()[0] > 32:
                 entries.append(entry)
             count -= 1
         yield UInt32(self, "next", "Next IFD offset")
@@ -306,19 +300,14 @@ class ExifIFD(FieldSet):
             if not array_size:
                 continue
             cls = entry.value_cls
-            if 1 < array_size:
-                name = "value_%s[]" % entry.name
-            else:
-                name = "value_%s" % entry.name
+            name = f"value_{entry.name}[]" if array_size > 1 else f"value_{entry.name}"
             desc = "Value of \"%s\"" % entry["tag"].display
-            if cls is String:
-                for index in xrange(array_size):
+            for _ in xrange(array_size):
+                if cls is String:
                     yield cls(self, name, value_size/8, desc, strip=" \0", charset="ISO-8859-1")
-            elif cls is Bytes:
-                for index in xrange(array_size):
+                elif cls is Bytes:
                     yield cls(self, name, value_size/8, desc)
-            else:
-                for index in xrange(array_size):
+                else:
                     yield cls(self, name, desc)
             value_index += 1
         if next_chunk_offset is not None:
@@ -327,7 +316,7 @@ class ExifIFD(FieldSet):
                 yield padding
 
     def createDescription(self):
-        return "Exif IFD (id %s)" % self["id"].value
+        return f'Exif IFD (id {self["id"].value})'
 
 class Exif(FieldSet):
     def createFields(self):
@@ -338,10 +327,7 @@ class Exif(FieldSet):
         yield String(self, "byte_order", 2, "Byte order", charset="ASCII")
         if self["byte_order"].value not in ("II", "MM"):
             raise ParserError("Invalid endian!")
-        if self["byte_order"].value == "II":
-           self.endian = LITTLE_ENDIAN
-        else:
-           self.endian = BIG_ENDIAN
+        self.endian = LITTLE_ENDIAN if self["byte_order"].value == "II" else BIG_ENDIAN
         yield UInt16(self, "version", "TIFF version number")
         yield UInt32(self, "img_dir_ofs", "Next image directory offset")
         while not self.eof:

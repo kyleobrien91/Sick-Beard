@@ -60,10 +60,8 @@ class SkeletonPage(_SkeletonPage):
 
         _SkeletonPage.__init__(self, *args, **KWs)
         if not self._CHEETAH__instanceInitialized:
-            cheetahKWArgs = {}
             allowedKWs = 'searchList namespaces filter filtersLib errorCatcher'.split()
-            for k, v in KWs.items():
-                if k in allowedKWs: cheetahKWArgs[k] = v
+            cheetahKWArgs = {k: v for k, v in KWs.items() if k in allowedKWs}
             self._initCheetahInstance(**cheetahKWArgs)
         
 

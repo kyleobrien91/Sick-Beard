@@ -34,15 +34,11 @@ class PascalStringWin32(FieldSet):
 
     def createFields(self):
         yield UInt32(self, "length", "Length in widechar characters")
-        size = self["length"].value
-        if size:
+        if size := self["length"].value:
             yield String(self, "text", size*2, charset=self.charset, strip=self.strip)
 
     def createValue(self):
-        if "text" in self:
-            return self["text"].value
-        else:
-            return None
+        return self["text"].value if "text" in self else None
 
 class GUID(FieldSet):
     """

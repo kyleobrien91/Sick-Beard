@@ -41,7 +41,7 @@ class PaddingBits(Bits):
 
     def createDisplay(self):
         if self._display_pattern:
-            return u"<padding pattern=%s>" % self.pattern
+            return f"<padding pattern={self.pattern}>"
         else:
             return Bits.createDisplay(self)
 
@@ -75,7 +75,7 @@ class PaddingBytes(Bytes):
             return False
 
         if self.MAX_SIZE < self._size/8:
-            self.info("only check first %s of padding" % humanFilesize(self.MAX_SIZE))
+            self.info(f"only check first {humanFilesize(self.MAX_SIZE)} of padding")
             content = self._parent.stream.readBytes(
                 self.absolute_address, self.MAX_SIZE)
         else:
@@ -114,10 +114,7 @@ class NullBits(PaddingBits):
         PaddingBits.__init__(self, parent, name, nbits, description, pattern=0)
 
     def createDisplay(self):
-        if self._display_pattern:
-            return "<null>"
-        else:
-            return Bits.createDisplay(self)
+        return "<null>" if self._display_pattern else Bits.createDisplay(self)
 
 class NullBytes(PaddingBytes):
     """
@@ -131,8 +128,5 @@ class NullBytes(PaddingBytes):
         PaddingBytes.__init__(self, parent, name, nbytes, description, pattern="\0")
 
     def createDisplay(self):
-        if self._display_pattern:
-            return "<null>"
-        else:
-            return Bytes.createDisplay(self)
+        return "<null>" if self._display_pattern else Bytes.createDisplay(self)
 

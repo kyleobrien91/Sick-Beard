@@ -47,7 +47,7 @@ class tzutc(datetime.tzinfo):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "%s()" % self.__class__.__name__
+        return f"{self.__class__.__name__}()"
 
     __reduce__ = object.__reduce__
 
@@ -74,9 +74,7 @@ class tzoffset(datetime.tzinfo):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "%s(%s, %s)" % (self.__class__.__name__,
-                               `self._name`,
-                               self._offset.days*86400+self._offset.seconds)
+        return f"{self.__class__.__name__}(self._name, {self._offset.days * 86400 + self._offset.seconds})"
 
     __reduce__ = object.__reduce__
 
@@ -89,16 +87,10 @@ class tzlocal(datetime.tzinfo):
         _dst_offset = _std_offset
 
     def utcoffset(self, dt):
-        if self._isdst(dt):
-            return self._dst_offset
-        else:
-            return self._std_offset
+        return self._dst_offset if self._isdst(dt) else self._std_offset
 
     def dst(self, dt):
-        if self._isdst(dt):
-            return self._dst_offset-self._std_offset
-        else:
-            return ZERO
+        return self._dst_offset-self._std_offset if self._isdst(dt) else ZERO
 
     def tzname(self, dt):
         return time.tzname[self._isdst(dt)]
@@ -139,13 +131,12 @@ class tzlocal(datetime.tzinfo):
             return False
         return (self._std_offset == other._std_offset and
                 self._dst_offset == other._dst_offset)
-        return True
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "%s()" % self.__class__.__name__
+        return f"{self.__class__.__name__}()"
 
     __reduce__ = object.__reduce__
 
@@ -161,8 +152,8 @@ class _ttinfo(object):
         for attr in self.__slots__:
             value = getattr(self, attr)
             if value is not None:
-                l.append("%s=%s" % (attr, `value`))
-        return "%s(%s)" % (self.__class__.__name__, ", ".join(l))
+                l.append(f"{attr}=value")
+        return f'{self.__class__.__name__}({", ".join(l)})'
 
     def __eq__(self, other):
         if not isinstance(other, _ttinfo):
@@ -178,10 +169,7 @@ class _ttinfo(object):
         return not self.__eq__(other)
 
     def __getstate__(self):
-        state = {}
-        for name in self.__slots__:
-            state[name] = getattr(self, name, None)
-        return state
+        return {name: getattr(self, name, None) for name in self.__slots__}
 
     def __setstate__(self, state):
         for name in self.__slots__:
@@ -223,7 +211,7 @@ class tzfile(datetime.tzinfo):
 
          # The number of standard/wall indicators stored in the file.
          ttisstdcnt,
-         
+
          # The number of leap seconds for which data is
          # stored in the file.
          leapcnt,
@@ -261,29 +249,14 @@ class tzfile(datetime.tzinfo):
         # with the same-indexed transition time. These values
         # serve as indices into an array of ttinfo structures that
         # appears next in the file.
-        
+
         if timecnt:
             self._trans_idx = struct.unpack(">%dB" % timecnt,
                                             fileobj.read(timecnt))
         else:
             self._trans_idx = []
-        
-        # Each ttinfo structure is written as a four-byte value
-        # for tt_gmtoff  of  type long,  in  a  standard  byte
-        # order, followed  by a one-byte value for tt_isdst
-        # and a one-byte  value  for  tt_abbrind.   In  each
-        # structure, tt_gmtoff  gives  the  number  of
-        # seconds to be added to UTC, tt_isdst tells whether
-        # tm_isdst should be set by  localtime(3),  and
-        # tt_abbrind serves  as an index into the array of
-        # time zone abbreviation characters that follow the
-        # ttinfo structure(s) in the file.
 
-        ttinfo = []
-
-        for i in range(typecnt):
-            ttinfo.append(struct.unpack(">lbb", fileobj.read(6)))
-
+        ttinfo = [struct.unpack(">lbb", fileobj.read(6)) for _ in range(typecnt)]
         abbr = fileobj.read(charcnt)
 
         # Then there are tzh_leapcnt pairs of four-byte
@@ -343,10 +316,7 @@ class tzfile(datetime.tzinfo):
             tti.isgmt = (ttisgmtcnt > i and isgmt[i] != 0)
             self._ttinfo_list.append(tti)
 
-        # Replace ttinfo indexes for ttinfo objects.
-        trans_idx = []
-        for idx in self._trans_idx:
-            trans_idx.append(self._ttinfo_list[idx])
+        trans_idx = [self._ttinfo_list[idx] for idx in self._trans_idx]
         self._trans_idx = tuple(trans_idx)
 
         # Set standard, dst, and before ttinfos. before will be
@@ -357,9 +327,7 @@ class tzfile(datetime.tzinfo):
         self._ttinfo_dst = None
         self._ttinfo_before = None
         if self._ttinfo_list:
-            if not self._trans_list:
-                self._ttinfo_std = self._ttinfo_first = self._ttinfo_list[0]
-            else:
+            if self._trans_list:
                 for i in range(timecnt-1,-1,-1):
                     tti = self._trans_idx[i]
                     if not self._ttinfo_std and not tti.isdst:
@@ -379,6 +347,8 @@ class tzfile(datetime.tzinfo):
                 else:
                     self._ttinfo_before = self._ttinfo_list[0]
 
+            else:
+                self._ttinfo_std = self._ttinfo_first = self._ttinfo_list[0]
         # Now fix transition times to become relative to wall time.
         #
         # I'm not sure about this. In my tests, the tz source file
@@ -413,21 +383,18 @@ class tzfile(datetime.tzinfo):
             return self._ttinfo_std
         if idx == 0:
             return self._ttinfo_before
-        if laststd:
-            while idx > 0:
-                tti = self._trans_idx[idx-1]
-                if not tti.isdst:
-                    return tti
-                idx -= 1
-            else:
-                return self._ttinfo_std
-        else:
+        if not laststd:
             return self._trans_idx[idx-1]
+        while idx > 0:
+            tti = self._trans_idx[idx-1]
+            if not tti.isdst:
+                return tti
+            idx -= 1
+        else:
+            return self._ttinfo_std
 
     def utcoffset(self, dt):
-        if not self._ttinfo_std:
-            return ZERO
-        return self._find_ttinfo(dt).delta
+        return ZERO if not self._ttinfo_std else self._find_ttinfo(dt).delta
 
     def dst(self, dt):
         if not self._ttinfo_dst:
@@ -449,9 +416,7 @@ class tzfile(datetime.tzinfo):
         # way to implement this.
         
     def tzname(self, dt):
-        if not self._ttinfo_std:
-            return None
-        return self._find_ttinfo(dt).abbr
+        return None if not self._ttinfo_std else self._find_ttinfo(dt).abbr
 
     def __eq__(self, other):
         if not isinstance(other, tzfile):
@@ -465,11 +430,11 @@ class tzfile(datetime.tzinfo):
 
 
     def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, `self._filename`)
+        return f"{self.__class__.__name__}(self._filename)"
 
     def __reduce__(self):
         if not os.path.isfile(self._filename):
-            raise ValueError, "Unpickable %s class" % self.__class__.__name__
+            raise (ValueError, f"Unpickable {self.__class__.__name__} class")
         return (self.__class__, (self._filename,))
 
 class tzrange(datetime.tzinfo):
@@ -504,22 +469,13 @@ class tzrange(datetime.tzinfo):
             self._end_delta = end
 
     def utcoffset(self, dt):
-        if self._isdst(dt):
-            return self._dst_offset
-        else:
-            return self._std_offset
+        return self._dst_offset if self._isdst(dt) else self._std_offset
 
     def dst(self, dt):
-        if self._isdst(dt):
-            return self._dst_offset-self._std_offset
-        else:
-            return ZERO
+        return self._dst_offset-self._std_offset if self._isdst(dt) else ZERO
 
     def tzname(self, dt):
-        if self._isdst(dt):
-            return self._dst_abbr
-        else:
-            return self._std_abbr
+        return self._dst_abbr if self._isdst(dt) else self._std_abbr
 
     def _isdst(self, dt):
         if not self._start_delta:
@@ -528,10 +484,7 @@ class tzrange(datetime.tzinfo):
         start = year+self._start_delta
         end = year+self._end_delta
         dt = dt.replace(tzinfo=None)
-        if start < end:
-            return dt >= start and dt < end
-        else:
-            return dt >= start or dt < end
+        return dt >= start and dt < end if start < end else dt >= start or dt < end
 
     def __eq__(self, other):
         if not isinstance(other, tzrange):
@@ -547,7 +500,7 @@ class tzrange(datetime.tzinfo):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return "%s(...)" % self.__class__.__name__
+        return f"{self.__class__.__name__}(...)"
 
     __reduce__ = object.__reduce__
 
@@ -589,10 +542,7 @@ class tzstr(tzrange):
             kwargs["month"] = x.month
             if x.weekday is not None:
                 kwargs["weekday"] = relativedelta.weekday(x.weekday, x.week)
-                if x.week > 0:
-                    kwargs["day"] = 1
-                else:
-                    kwargs["day"] = 31
+                kwargs["day"] = 1 if x.week > 0 else 31
             elif x.day:
                 kwargs["day"] = x.day
         elif x.yday is not None:
@@ -610,11 +560,7 @@ class tzstr(tzrange):
                 kwargs["month"] = 10
                 kwargs["day"] = 31
                 kwargs["weekday"] = relativedelta.SU(-1)
-        if x.time is not None:
-            kwargs["seconds"] = x.time
-        else:
-            # Default is 2AM.
-            kwargs["seconds"] = 7200
+        kwargs["seconds"] = x.time if x.time is not None else 7200
         if isend:
             # Convert to standard time, to follow the documented way
             # of working with the extra hour. See the documentation
@@ -624,7 +570,7 @@ class tzstr(tzrange):
         return relativedelta.relativedelta(**kwargs)
 
     def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, `self._s`)
+        return f"{self.__class__.__name__}(self._s)"
 
 class _tzicalvtzcomp:
     def __init__(self, tzoffsetfrom, tzoffsetto, isdst,
@@ -685,16 +631,13 @@ class _tzicalvtz(datetime.tzinfo):
 
     def dst(self, dt):
         comp = self._find_comp(dt)
-        if comp.isdst:
-            return comp.tzoffsetdiff
-        else:
-            return ZERO
+        return comp.tzoffsetdiff if comp.isdst else ZERO
 
     def tzname(self, dt):
         return self._find_comp(dt).tzname
 
     def __repr__(self):
-        return "<tzicalvtz %s>" % `self._tzid`
+        return '<tzicalvtz self._tzid>'
 
     __reduce__ = object.__reduce__
 
@@ -743,7 +686,7 @@ class tzical:
         elif len(s) == 6:
             return (int(s[:2])*3600+int(s[2:4])*60+int(s[4:]))*signal
         else:
-            raise ValueError, "invalid offset: "+s
+            raise (ValueError, f"invalid offset: {s}")
 
     def _parse_rfc(self, s):
         lines = s.splitlines()
@@ -777,11 +720,8 @@ class tzical:
             parms = parms[1:]
             if invtz:
                 if name == "BEGIN":
-                    if value in ("STANDARD", "DAYLIGHT"):
-                        # Process component
-                        pass
-                    else:
-                        raise ValueError, "unknown component: "+value
+                    if value not in ("STANDARD", "DAYLIGHT"):
+                        raise (ValueError, f"unknown component: {value}")
                     comptype = value
                     founddtstart = False
                     tzoffsetfrom = None
@@ -791,27 +731,26 @@ class tzical:
                 elif name == "END":
                     if value == "VTIMEZONE":
                         if comptype:
-                            raise ValueError, \
-                                  "component not closed: "+comptype
+                            raise (ValueError, f"component not closed: {comptype}")
                         if not tzid:
                             raise ValueError, \
-                                  "mandatory TZID not found"
+                                      "mandatory TZID not found"
                         if not comps:
                             raise ValueError, \
-                                  "at least one component is needed"
+                                      "at least one component is needed"
                         # Process vtimezone
                         self._vtz[tzid] = _tzicalvtz(tzid, comps)
                         invtz = False
                     elif value == comptype:
                         if not founddtstart:
                             raise ValueError, \
-                                  "mandatory DTSTART not found"
+                                      "mandatory DTSTART not found"
                         if tzoffsetfrom is None:
                             raise ValueError, \
-                                  "mandatory TZOFFSETFROM not found"
+                                      "mandatory TZOFFSETFROM not found"
                         if tzoffsetto is None:
                             raise ValueError, \
-                                  "mandatory TZOFFSETFROM not found"
+                                      "mandatory TZOFFSETFROM not found"
                         # Process component
                         rr = None
                         if rrulelines:
@@ -825,8 +764,7 @@ class tzical:
                         comps.append(comp)
                         comptype = None
                     else:
-                        raise ValueError, \
-                              "invalid component end: "+value
+                        raise (ValueError, f"invalid component end: {value}")
                 elif comptype:
                     if name == "DTSTART":
                         rrulelines.append(line)
@@ -835,40 +773,32 @@ class tzical:
                         rrulelines.append(line)
                     elif name == "TZOFFSETFROM":
                         if parms:
-                            raise ValueError, \
-                                  "unsupported %s parm: %s "%(name, parms[0])
-                        tzoffsetfrom = self._parse_offset(value)
+                            raise (ValueError, f"unsupported {name} parm: {parms[0]} ")
+                        else:
+                            tzoffsetfrom = self._parse_offset(value)
                     elif name == "TZOFFSETTO":
                         if parms:
-                            raise ValueError, \
-                                  "unsupported TZOFFSETTO parm: "+parms[0]
+                            raise (ValueError, f"unsupported TZOFFSETTO parm: {parms[0]}")
                         tzoffsetto = self._parse_offset(value)
                     elif name == "TZNAME":
                         if parms:
-                            raise ValueError, \
-                                  "unsupported TZNAME parm: "+parms[0]
+                            raise (ValueError, f"unsupported TZNAME parm: {parms[0]}")
                         tzname = value
-                    elif name == "COMMENT":
-                        pass
-                    else:
-                        raise ValueError, "unsupported property: "+name
-                else:
-                    if name == "TZID":
-                        if parms:
-                            raise ValueError, \
-                                  "unsupported TZID parm: "+parms[0]
-                        tzid = value
-                    elif name in ("TZURL", "LAST-MODIFIED", "COMMENT"):
-                        pass
-                    else:
-                        raise ValueError, "unsupported property: "+name
+                    elif name != "COMMENT":
+                        raise (ValueError, f"unsupported property: {name}")
+                elif name == "TZID":
+                    if parms:
+                        raise (ValueError, f"unsupported TZID parm: {parms[0]}")
+                    tzid = value
+                elif name not in ("TZURL", "LAST-MODIFIED", "COMMENT"):
+                    raise (ValueError, f"unsupported property: {name}")
             elif name == "BEGIN" and value == "VTIMEZONE":
                 tzid = None
                 comps = []
                 invtz = True
 
     def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, `self._s`)
+        return f"{self.__class__.__name__}(self._s)"
 
 if sys.platform != "win32":
     TZFILES = ["/etc/localtime", "localtime"]
@@ -906,10 +836,7 @@ def gettz(name=None):
         if name.startswith(":"):
             name = name[:-1]
         if os.path.isabs(name):
-            if os.path.isfile(name):
-                tz = tzfile(name)
-            else:
-                tz = None
+            tz = tzfile(name) if os.path.isfile(name) else None
         else:
             for path in TZPATHS:
                 filepath = os.path.join(path, name)

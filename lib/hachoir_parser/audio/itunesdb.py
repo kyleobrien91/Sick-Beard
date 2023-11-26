@@ -94,7 +94,7 @@ class DataObject(FieldSet):
         yield UInt32(self, "header_length", "Header Length")
         yield UInt32(self, "entry_length", "Entry Length")
         yield Enum(UInt32(self, "type", "type"),self.type_name)
-        if(self["type"].value<15):
+        if (self["type"].value<15):
             yield UInt32(self, "unknown[]")
             yield UInt32(self, "unknown[]")
             yield UInt32(self, "position", "Position")
@@ -113,17 +113,13 @@ class DataObject(FieldSet):
             yield UInt32(self, "entry_count", "Entry Count")
             indexes_size = self["entry_count"].value*4
             padding_offset = self["entry_length"].value - indexes_size
-            padding = self.seekByte(padding_offset, "header padding")
-            if padding:
+            if padding := self.seekByte(padding_offset, "header padding"):
                 yield padding
             for i in xrange(self["entry_count"].value):
-                yield UInt32(self, "index["+str(i)+"]", "Index of the "+str(i)+"nth mhit")
-        else:
-            padding = self.seekByte(self["header_length"].value, "header padding")
-            if padding:
-                yield padding
-        padding = self.seekBit(self._size, "entry padding")
-        if padding:
+                yield UInt32(self, f"index[{str(i)}]", f"Index of the {str(i)}nth mhit")
+        elif padding := self.seekByte(self["header_length"].value, "header padding"):
+            yield padding
+        if padding := self.seekBit(self._size, "entry padding"):
             yield padding
 
 class TrackItem(FieldSet):
@@ -222,15 +218,13 @@ class TrackItem(FieldSet):
         yield UInt32(self, "unknown[]")
         yield UInt32(self, "unknown[]")
         yield UInt32(self, "unknown[]")
-        padding = self.seekByte(self["header_length"].value, "header padding")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "header padding"):
             yield padding
 
         #while ((self.stream.readBytes(0, 4) == 'mhod') and  ((self.current_size/8) < self["entry_length"].value)):
-        for i in xrange(self["string_number"].value):
+        for _ in xrange(self["string_number"].value):
             yield DataObject(self, "data[]")
-        padding = self.seekBit(self._size, "entry padding")
-        if padding:
+        if padding := self.seekBit(self._size, "entry padding"):
             yield padding
 
 class TrackList(FieldSet):
@@ -239,11 +233,10 @@ class TrackList(FieldSet):
         yield UInt32(self, "header_length", "Header Length")
         yield UInt32(self, "track_number", "Number of Tracks")
 
-        padding = self.seekByte(self["header_length"].value, "header padding")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "header padding"):
             yield padding
 
-        for i in xrange(self["track_number"].value):
+        for _ in xrange(self["track_number"].value):
             yield TrackItem(self, "track[]")
 
 class PlaylistItem(FieldSet):
@@ -261,11 +254,10 @@ class PlaylistItem(FieldSet):
         yield UInt32(self, "track_id", "Track ID")
         yield TimestampMac32(self, "timestamp", "Song Timestamp")
         yield UInt32(self, "podcast_grouping_ref", "Podcast Grouping Reference")
-        padding = self.seekByte(self["header_length"].value, "header padding")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "header padding"):
             yield padding
 
-        for i in xrange(self["data_object_child_count"].value):
+        for _ in xrange(self["data_object_child_count"].value):
             yield DataObject(self, "mhod[]")
 
 
@@ -335,14 +327,13 @@ class Playlist(FieldSet):
         yield Enum(UInt16(self, "is_podcast", "Playlist or Podcast List?"), self.is_podcast_name)
         yield Enum(UInt32(self, "sort_order", "Playlist Sort Order"), self.list_sort_order_name)
 
-        padding = self.seekByte(self["header_length"].value, "entry padding")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "entry padding"):
             yield padding
 
-        for i in xrange(self["data_object_child_count"].value):
+        for _ in xrange(self["data_object_child_count"].value):
             yield DataObject(self, "mhod[]")
 
-        for i in xrange(self["playlist_count"].value):
+        for _ in xrange(self["playlist_count"].value):
             yield PlaylistItem(self, "playlist_item[]")
 
 
@@ -353,11 +344,10 @@ class PlaylistList(FieldSet):
         yield UInt32(self, "header_length", "Header Length")
         yield UInt32(self, "playlist_number", "Number of Playlists")
 
-        padding = self.seekByte(self["header_length"].value, "header padding")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "header padding"):
             yield padding
 
-        for i in xrange(self["playlist_number"].value):
+        for _ in xrange(self["playlist_number"].value):
             yield Playlist(self, "playlist[]")
 
 class DataSet(FieldSet):
@@ -375,8 +365,7 @@ class DataSet(FieldSet):
         yield UInt32(self, "header_length", "Header Length")
         yield UInt32(self, "entry_length", "Entry Length")
         yield Enum(UInt32(self, "type", "type"),self.type_name)
-        padding = self.seekByte(self["header_length"].value, "header_raw")
-        if padding:
+        if padding := self.seekByte(self["header_length"].value, "header_raw"):
             yield padding
         if self["type"].value == 1:
             yield TrackList(self, "tracklist[]")
@@ -384,8 +373,7 @@ class DataSet(FieldSet):
             yield PlaylistList(self, "playlist_list[]");
         if self["type"].value == 3:
             yield PlaylistList(self, "podcast_list[]");
-        padding = self.seekBit(self._size, "entry padding")
-        if padding:
+        if padding := self.seekBit(self._size, "entry padding"):
             yield padding
 
 class DataBase(FieldSet):
@@ -422,10 +410,9 @@ class ITunesDBFile(Parser):
         size = self["header_length"].value-self.current_size/ 8
         if size>0:
             yield NullBytes(self, "padding", size)
-        for i in xrange(self["child_number"].value):
+        for _ in xrange(self["child_number"].value):
             yield DataSet(self, "dataset[]")
-        padding = self.seekByte(self["entry_length"].value, "entry padding")
-        if padding:
+        if padding := self.seekByte(self["entry_length"].value, "entry padding"):
             yield padding
 
     def createContentSize(self):

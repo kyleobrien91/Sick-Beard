@@ -34,8 +34,7 @@ class UUID(Bytes):
         Bytes.__init__(self, parent, name, 16)
     def createDisplay(self):
         text = str2hex(self.value, format=r"%02x")
-        return "%s-%s-%s-%s-%s" % (
-            text[:8], text[8:12], text[12:16], text[16:20], text[20:])
+        return f"{text[:8]}-{text[8:12]}-{text[12:16]}-{text[16:20]}-{text[20:]}"
 
 class LinuxSwapFile(Parser):
     PARSER_TAGS = {
@@ -76,8 +75,7 @@ class LinuxSwapFile(Parser):
         else:
             text = "Linux swap file version 1"
         nb_page = self.getPageCount()
-        return "%s, page size: %s, %s pages" % (
-            text, humanFilesize(PAGE_SIZE), nb_page)
+        return f"{text}, page size: {humanFilesize(PAGE_SIZE)}, {nb_page} pages"
 
     def createFields(self):
         # First kilobyte: boot sectors
@@ -91,24 +89,18 @@ class LinuxSwapFile(Parser):
         yield UUID(self, "sws_volume")
         yield NullBytes(self, "reserved", 117*4)
 
-        # Read bad pages (if any)
-        count = self["nb_badpage"].value
-        if count:
+        if count := self["nb_badpage"].value:
             if MAX_SWAP_BADPAGES < count:
                 raise ParserError("Invalid number of bad page (%u)" % count)
             yield GenericVector(self, "badpages", count, UInt32, "badpage")
 
-        # Read magic
-        padding = self.seekByte(PAGE_SIZE - 10, "padding", null=True)
-        if padding:
+        if padding := self.seekByte(PAGE_SIZE - 10, "padding", null=True):
             yield padding
         yield String(self, "magic", 10, charset="ASCII")
 
         # Read all pages
         yield GenericVector(self, "pages", self["last_page"].value, Page, "page")
 
-        # Padding at the end
-        padding = self.seekBit(self.size, "end_padding", null=True)
-        if padding:
+        if padding := self.seekBit(self.size, "end_padding", null=True):
             yield padding
 

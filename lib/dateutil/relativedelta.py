@@ -20,10 +20,7 @@ class weekday(object):
         self.n = n
 
     def __call__(self, n):
-        if n == self.n:
-            return self
-        else:
-            return self.__class__(self.weekday, n)
+        return self if n == self.n else self.__class__(self.weekday, n)
 
     def __eq__(self, other):
         try:
@@ -35,12 +32,9 @@ class weekday(object):
 
     def __repr__(self):
         s = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")[self.weekday]
-        if not self.n:
-            return s
-        else:
-            return "%s(%+d)" % (s, self.n)
+        return s if not self.n else "%s(%+d)" % (s, self.n)
 
-MO, TU, WE, TH, FR, SA, SU = weekdays = tuple([weekday(x) for x in range(7)])
+MO, TU, WE, TH, FR, SA, SU = weekdays = tuple(weekday(x) for x in range(7))
 
 class relativedelta:
     """
@@ -114,7 +108,7 @@ Here is the behavior of operations with relativedelta:
                  hour=None, minute=None, second=None, microsecond=None):
         if dt1 and dt2:
             if not isinstance(dt1, datetime.date) or \
-               not isinstance(dt2, datetime.date):
+                   not isinstance(dt2, datetime.date):
                 raise TypeError, "relativedelta only diffs datetime/date"
             if type(dt1) is not type(dt2):
                 if not isinstance(dt1, datetime.datetime):
@@ -172,27 +166,20 @@ Here is the behavior of operations with relativedelta:
             self.second = second
             self.microsecond = microsecond
 
-            if type(weekday) is int:
-                self.weekday = weekdays[weekday]
-            else:
-                self.weekday = weekday
-
+            self.weekday = weekdays[weekday] if type(weekday) is int else weekday
             yday = 0
             if nlyearday:
                 yday = nlyearday
             elif yearday:
                 yday = yearday
-                if yearday > 59:
+                if yday > 59:
                     self.leapdays = -1
             if yday:
                 ydayidx = [31,59,90,120,151,181,212,243,273,304,334,366]
                 for idx, ydays in enumerate(ydayidx):
                     if yday <= ydays:
                         self.month = idx+1
-                        if idx == 0:
-                            self.day = yday
-                        else:
-                            self.day = yday-ydayidx[idx-1]
+                        self.day = yday if idx == 0 else yday-ydayidx[idx-1]
                         break
                 else:
                     raise ValueError, "invalid year day (%d)" % yday
@@ -347,22 +334,24 @@ Here is the behavior of operations with relativedelta:
                              microsecond=self.microsecond)
 
     def __nonzero__(self):
-        return not (not self.years and
-                    not self.months and
-                    not self.days and
-                    not self.hours and
-                    not self.minutes and
-                    not self.seconds and
-                    not self.microseconds and
-                    not self.leapdays and
-                    self.year is None and
-                    self.month is None and
-                    self.day is None and
-                    self.weekday is None and
-                    self.hour is None and
-                    self.minute is None and
-                    self.second is None and
-                    self.microsecond is None)
+        return bool(
+            self.years
+            or self.months
+            or self.days
+            or self.hours
+            or self.minutes
+            or self.seconds
+            or self.microseconds
+            or self.leapdays
+            or self.year is not None
+            or self.month is not None
+            or self.day is not None
+            or self.weekday is not None
+            or self.hour is not None
+            or self.minute is not None
+            or self.second is not None
+            or self.microsecond is not None
+        )
 
     def __mul__(self, other):
         f = float(other)
@@ -386,14 +375,16 @@ Here is the behavior of operations with relativedelta:
     def __eq__(self, other):
         if not isinstance(other, relativedelta):
             return False
-        if self.weekday or other.weekday:
-            if not self.weekday or not other.weekday:
+        if self.weekday:
+            if not other.weekday:
                 return False
             if self.weekday.weekday != other.weekday.weekday:
                 return False
             n1, n2 = self.weekday.n, other.weekday.n
             if n1 != n2 and not ((not n1 or n1 == 1) and (not n2 or n2 == 1)):
                 return False
+        elif other.weekday:
+            return False
         return (self.years == other.years and
                 self.months == other.months and
                 self.days == other.days and
@@ -419,14 +410,13 @@ Here is the behavior of operations with relativedelta:
         l = []
         for attr in ["years", "months", "days", "leapdays",
                      "hours", "minutes", "seconds", "microseconds"]:
-            value = getattr(self, attr)
-            if value:
+            if value := getattr(self, attr):
                 l.append("%s=%+d" % (attr, value))
         for attr in ["year", "month", "day", "weekday",
                      "hour", "minute", "second", "microsecond"]:
             value = getattr(self, attr)
             if value is not None:
-                l.append("%s=%s" % (attr, `value`))
-        return "%s(%s)" % (self.__class__.__name__, ", ".join(l))
+                l.append(f"{attr}=value")
+        return f'{self.__class__.__name__}({", ".join(l)})'
 
 # vim:ts=4:sw=4:et

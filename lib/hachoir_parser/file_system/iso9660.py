@@ -84,8 +84,7 @@ class Volume(FieldSet):
         if self["signature"].value != "CD001":
             raise ParserError("Invalid ISO 9960 volume signature")
         yield UInt8(self, "version", "Volume descriptor version")
-        cls = self.content_handler.get(self["type"].value, None)
-        if cls:
+        if cls := self.content_handler.get(self["type"].value, None):
             yield cls(self, "content")
         else:
             yield RawBytes(self, "raw_content", 2048-7)

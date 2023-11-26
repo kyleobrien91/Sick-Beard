@@ -94,11 +94,13 @@ class FileFinder:
                         addDir( fullPath )
 
     def filterDir(self, baseName, fullPath):
-        
+
         """A hook for filtering out certain dirs. """
         
-        return not (baseName in self._ignoreBasenames or 
-                    fullPath in self._ignoreDirs)
+        return (
+            baseName not in self._ignoreBasenames
+            and fullPath not in self._ignoreDirs
+        )
     
     def processDir(self, dir, glob=glob):
         extend = self._files.extend
@@ -139,13 +141,10 @@ class _GenSubberFunc:
         self._pos += offset
 
     def readTo(self, to, start=None):
-        if start == None:
+        if start is None:
             start = self._pos
         self._pos = to
-        if self.atEnd():
-            return self._src[start:]
-        else:
-            return self._src[start:to]
+        return self._src[start:] if self.atEnd() else self._src[start:to]
 
     ## match and get methods
         
@@ -187,10 +186,10 @@ class _GenSubberFunc:
         self.addChunk(repr(strConst))
     
     def eatBackref(self):
-        self.addChunk( 'm.group(' + self.getBackref() + ')' )
+        self.addChunk(f'm.group({self.getBackref()})')
 
     def eatGroup(self):
-        self.addChunk( 'm.group("' + self.getGroup() + '")' )
+        self.addChunk(f'm.group("{self.getGroup()}")')
     
     def addChunk(self, chunk):
         self._codeChunks.append(chunk)
@@ -242,7 +241,7 @@ class FindAndReplace:
             ## now check to make sure pgrep understands the pattern
             tmpFile = mktemp()
             open(tmpFile, 'w').write('#')
-            if not (os.popen3('pgrep "' + pattern + '" ' + tmpFile)[2].read()):
+            if not os.popen3(f'pgrep "{pattern}" {tmpFile}')[2].read():
                 # it didn't print an error msg so we're ok
                 self._usePgrep = True
             os.remove(tmpFile)
@@ -260,13 +259,13 @@ class FindAndReplace:
         for file in self._files:
             if not os.path.isfile(file):
                 continue # skip dirs etc.
-            
+
             self._currFile = file
             found = False
             if 'orig' in locals():
                 del orig
             if self._usePgrep:
-                if os.popen('pgrep "' + pattern + '" ' + file ).read():
+                if os.popen(f'pgrep "{pattern}" {file}').read():
                     found = True
             else:
                 orig = open(file).read()
@@ -320,13 +319,13 @@ class SourceFileStats:
             blankLines += fileStats['blankLines']
             commentLines += fileStats['commentLines']
             totalLines += fileStats['totalLines']
-            
-        stats = {'codeLines': codeLines,
-                 'blankLines': blankLines,
-                 'commentLines': commentLines,
-                 'totalLines': totalLines,
-                 }
-        return stats
+
+        return {
+            'codeLines': codeLines,
+            'blankLines': blankLines,
+            'commentLines': commentLines,
+            'totalLines': totalLines,
+        }
         
     def printStats(self):
         pass
@@ -334,12 +333,12 @@ class SourceFileStats:
     def getFileStats(self, fileName):
         codeLines = 0
         blankLines = 0
-        commentLines = 0 
+        commentLines = 0
         commentLineRe = re.compile(r'\s#.*$')
         blankLineRe = re.compile('\s$')
         lines = open(fileName).read().splitlines()
         totalLines = len(lines)
-        
+
         for line in lines:
             if commentLineRe.match(line):
                 commentLines += 1
@@ -348,10 +347,9 @@ class SourceFileStats:
             else:
                 codeLines += 1
 
-        stats = {'codeLines': codeLines,
-                 'blankLines': blankLines,
-                 'commentLines': commentLines,
-                 'totalLines': totalLines,
-                 }
-        
-        return stats
+        return {
+            'codeLines': codeLines,
+            'blankLines': blankLines,
+            'commentLines': commentLines,
+            'totalLines': totalLines,
+        }

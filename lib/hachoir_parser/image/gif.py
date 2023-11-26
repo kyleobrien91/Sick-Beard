@@ -117,7 +117,7 @@ def defaultExtensionParser(parent):
     while True:
         size = UInt8(parent, "size[]", "Size (in bytes)")
         yield size
-        if 0 < size.value:
+        if size.value > 0:
             yield RawBytes(parent, "content[]", size.value)
         else:
             break
@@ -139,11 +139,10 @@ class Extension(FieldSet):
 
     def createFields(self):
         yield textHandler(UInt8(self, "code", "Extension code"), hexadecimal)
-        for field in self.parser(self):
-            yield field
+        yield from self.parser(self)
 
     def createDescription(self):
-        return "Extension: function %s" % self["func"].display
+        return f'Extension: function {self["func"].display}'
 
 class ScreenDescriptor(FieldSet):
     def createFields(self):
@@ -221,7 +220,6 @@ class GifFile(Parser):
         field = self["image[0]"]
         start = field.absolute_address + field.size
         end = start + MAX_FILE_SIZE*8
-        pos = self.stream.searchBytes("\0;", start, end)
-        if pos:
+        if pos := self.stream.searchBytes("\0;", start, end):
             return pos + 16
         return None

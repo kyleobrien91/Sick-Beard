@@ -90,8 +90,7 @@ def parseAVIStreamFormat(self):
         info = TYPE_HANDLER[strtype]
         if info[1] <= size:
             handler = info[0]
-    for field in handler(self, size):
-        yield field
+    yield from handler(self, size)
 
 def parseAVIStreamHeader(self):
     if self["size"].value != 56:
@@ -155,7 +154,7 @@ def parseCDDA(self):
 def parseWAVFormat(self):
     size = self["size"].value
     if size not in (16, 18):
-        self.warning("Format with size of %s bytes is not supported!" % size)
+        self.warning(f"Format with size of {size} bytes is not supported!")
     yield Enum(UInt16(self, "codec", "Audio codec"), audio_codec_name)
     yield UInt16(self, "nb_channel", "Number of audio channel")
     yield UInt32(self, "sample_per_sec", "Sample per second")
@@ -198,7 +197,7 @@ def parseAviHeader(self):
 def parseODML(self):
     yield UInt32(self, "total_frame", "Real number of frame of OpenDML video")
     padding = self["size"].value - 4
-    if 0 < padding:
+    if padding > 0:
         yield NullBytes(self, "padding[]", padding)
 
 class AVIIndexEntry(FieldSet):
@@ -271,25 +270,22 @@ class Chunk(FieldSet):
         if self["tag"].value == "LIST":
             yield String(self, "subtag", 4, "Sub-tag", charset="ASCII")
             handler = self.tag_info[1]
-            while 8 < (self.size - self.current_size)/8:
+            while self.size - self.current_size > 64:
                 field = self.__class__(self, "field[]")
                 yield field
                 if (field.size/8) % 2 != 0:
                     yield UInt8(self, "padding[]", "Padding")
         else:
-            handler = self.tag_info[1]
-            if handler:
-                for field in handler(self):
-                    yield field
+            if handler := self.tag_info[1]:
+                yield from handler(self)
             else:
                 yield RawBytes(self, "raw_content", self["size"].value)
-            padding = self.seekBit(self._size)
-            if padding:
+            if padding := self.seekBit(self._size):
                 yield padding
 
     def createDescription(self):
         tag = self["tag"].display
-        return u"Chunk (tag %s)" % tag
+        return f"Chunk (tag {tag})"
 
 class ChunkAVI(Chunk):
     TAG_INFO = Chunk.TAG_INFO.copy()
@@ -318,7 +314,7 @@ class ChunkWAVE(Chunk):
 def parseAnimationHeader(self):
     yield UInt32(self, "hdr_size", "Size of header (36 bytes)")
     if self["hdr_size"].value != 36:
-        self.warning("Animation header with unknown size (%s)" % self["size"].value)
+        self.warning(f'Animation header with unknown size ({self["size"].value})')
     yield UInt32(self, "nb_frame", "Number of unique Icons in this cursor")
     yield UInt32(self, "nb_step", "Number of Blits before the animation cycles")
     yield UInt32(self, "cx")
@@ -414,12 +410,11 @@ class RiffFile(Parser):
             if "headers/avi_hdr" in self:
                 header = self["headers/avi_hdr"]
                 desc += ": %ux%u pixels" % (header["width"].value, header["height"].value)
-                microsec = header["microsec_per_frame"].value
-                if microsec:
+                if microsec := header["microsec_per_frame"].value:
                     desc += ", %.1f fps" % (1000000.0 / microsec)
                     if "total_frame" in header and header["total_frame"].value:
                         delta = timedelta(seconds=float(header["total_frame"].value) * microsec)
-                        desc += ", " + humanDuration(delta)
+                        desc += f", {humanDuration(delta)}"
             return desc
         else:
             try:

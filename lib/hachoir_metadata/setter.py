@@ -51,15 +51,13 @@ def parseDatetime(value):
     datetime.datetime(2007, 7, 19, 9, 3, 57, tzinfo=<Timezone delta=2:00:00, name='+0200'>)
     """
     value = NORMALIZE_REGEX.sub("~", value.strip())
-    regs = YEAR_REGEX1.match(value)
-    if regs:
+    if regs := YEAR_REGEX1.match(value):
         try:
             year = int(regs.group(1))
             return (date(year, 1, 1), unicode(year))
         except ValueError:
             pass
-    regs = DATE_REGEX1.match(value)
-    if regs:
+    if regs := DATE_REGEX1.match(value):
         try:
             year = int(regs.group(1))
             month = int(regs.group(2))
@@ -67,8 +65,7 @@ def parseDatetime(value):
             return date(year, month, day)
         except ValueError:
             pass
-    regs = DATETIME_REGEX1.match(value)
-    if regs:
+    if regs := DATETIME_REGEX1.match(value):
         try:
             year = int(regs.group(1))
             month = int(regs.group(2))
@@ -79,8 +76,7 @@ def parseDatetime(value):
             return datetime(year, month, day, hour, min, sec)
         except ValueError:
             pass
-    regs = DATETIME_REGEX2.match(value)
-    if regs:
+    if regs := DATETIME_REGEX2.match(value):
         try:
             month = int(regs.group(1))
             day = int(regs.group(2))
@@ -93,8 +89,7 @@ def parseDatetime(value):
             pass
     current_locale = setlocale(LC_ALL, "C")
     try:
-        match = TIMEZONE_REGEX.match(value)
-        if match:
+        if match := TIMEZONE_REGEX.match(value):
             without_timezone = match.group(1)
             delta = int(match.group(2))
             delta = createTimezone(delta)
@@ -103,21 +98,21 @@ def parseDatetime(value):
             delta = None
         try:
             timestamp = strptime(without_timezone, ISO_TIMESTAMP)
-            arguments = list(timestamp[0:6]) + [0, delta]
+            arguments = list(timestamp[:6]) + [0, delta]
             return datetime(*arguments)
         except ValueError:
             pass
 
         try:
             timestamp = strptime(without_timezone, RIFF_TIMESTAMP)
-            arguments = list(timestamp[0:6]) + [0, delta]
+            arguments = list(timestamp[:6]) + [0, delta]
             return datetime(*arguments)
         except ValueError:
             pass
 
         try:
             timestamp = strptime(value, MONTH_YEAR)
-            arguments = list(timestamp[0:3])
+            arguments = list(timestamp[:3])
             return date(*arguments)
         except ValueError:
             pass
@@ -165,7 +160,5 @@ def setTrackNumber(meta, key, number):
         return None
 
 def normalizeString(text):
-    if config.RAW_OUTPUT:
-        return text
-    return text.strip(" \t\v\n\r\0")
+    return text if config.RAW_OUTPUT else text.strip(" \t\v\n\r\0")
 

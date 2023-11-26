@@ -200,24 +200,20 @@ class ID3v1(FieldSet):
         # last byte (127) is not space?
         if bytes[1] != ' ':
             # byte 126 is nul?
-            if bytes[0] == 0x00:
-                return "v1.1"
-            else:
-                return "v1.1b"
+            return "v1.1" if bytes[0] == 0x00 else "v1.1b"
         else:
             return "1.0"
 
     def createDescription(self):
         version = self.getVersion()
-        return "ID3 %s: author=%s, song=%s" % (
-            version, self["author"].value, self["song"].value)
+        return f'ID3 {version}: author={self["author"].value}, song={self["song"].value}'
 
 def getCharset(field):
     try:
         key = field.value
         return ID3_StringCharset.charset_name[key]
     except KeyError:
-        raise ParserError("ID3v2: Invalid charset (%s)." % key)
+        raise ParserError(f"ID3v2: Invalid charset ({key}).")
 
 class ID3_String(FieldSet):
     STRIP = " \0"
@@ -253,10 +249,10 @@ class ID3_GEOB(ID3_StringCharset):
         yield CString(self, "mime", "MIME type", charset=charset)
         yield CString(self, "filename", "File name", charset=charset)
         yield CString(self, "description", "Content description", charset=charset)
-        size = (self.size - self.current_size) // 8
-        if not size:
+        if size := (self.size - self.current_size) // 8:
+            yield String(self, "text", size, "Text", charset=charset)
+        else:
             return
-        yield String(self, "text", size, "Text", charset=charset)
 
 class ID3_Comment(ID3_StringCharset):
     def createFields(self):
@@ -264,10 +260,10 @@ class ID3_Comment(ID3_StringCharset):
         yield String(self, "lang", 3, "Language", charset="ASCII")
         charset = getCharset(self["charset"])
         yield CString(self, "title", "Title", charset=charset, strip=self.STRIP)
-        size = (self.size - self.current_size) // 8
-        if not size:
+        if size := (self.size - self.current_size) // 8:
+            yield String(self, "text", size, "Text", charset=charset, strip=self.STRIP)
+        else:
             return
-        yield String(self, "text", size, "Text", charset=charset, strip=self.STRIP)
 
 class ID3_StringTitle(ID3_StringCharset):
     def createFields(self):
@@ -276,10 +272,10 @@ class ID3_StringTitle(ID3_StringCharset):
             return
         charset = getCharset(self["charset"])
         yield CString(self, "title", "Title", charset=charset, strip=self.STRIP)
-        size = (self.size - self.current_size)/8
-        if not size:
+        if size := (self.size - self.current_size) / 8:
+            yield String(self, "text", size, "Text", charset=charset, strip=self.STRIP)
+        else:
             return
-        yield String(self, "text", size, "Text", charset=charset, strip=self.STRIP)
 
 class ID3_Private(FieldSet):
     def createFields(self):
@@ -333,8 +329,7 @@ class ID3_Picture23(FieldSet):
         yield String(self, "img_fmt", 3, charset="ASCII")
         yield Enum(UInt8(self, "pict_type"), self.pict_type_name)
         yield CString(self, "text", "Text", charset=charset, strip=" \0")
-        size = (self._size - self._current_size) / 8
-        if size:
+        if size := (self._size - self._current_size) / 8:
             yield RawBytes(self, "img_data", size)
 
 class ID3_Picture24(FieldSet):
@@ -344,8 +339,7 @@ class ID3_Picture24(FieldSet):
         yield CString(self, "mime", "MIME type", charset=charset)
         yield Enum(UInt8(self, "pict_type"), ID3_Picture23.pict_type_name)
         yield CString(self, "description", charset=charset)
-        size = (self._size - self._current_size) / 8
-        if size:
+        if size := (self._size - self._current_size) / 8:
             yield RawBytes(self, "img_data", size)
 
 class ID3_Chunk(FieldSet):
@@ -394,16 +388,16 @@ class ID3_Chunk(FieldSet):
 
     def __init__(self, *args):
         FieldSet.__init__(self, *args)
-        if 3 <= self["../ver_major"].value:
+        if self["../ver_major"].value >= 3:
             self._size = (10 + self["size"].value) * 8
         else:
             self._size = (self["size"].value + 6) * 8
 
     def createFields(self):
-        if 3 <= self["../ver_major"].value:
+        if self["../ver_major"].value >= 3:
             # ID3 v2.3 and 2.4
             yield Enum(String(self, "tag", 4, "Tag", charset="ASCII", strip="\0"), ID3_Chunk.tag23_name)
-            if 4 <= self["../ver_major"].value:
+            if self["../ver_major"].value >= 4:
                 yield ID3_Size(self, "size")   # ID3 v2.4
             else:
                 yield UInt32(self, "size")   # ID3 v2.3
@@ -441,7 +435,7 @@ class ID3_Chunk(FieldSet):
 
     def createDescription(self):
         if self["size"].value != 0:
-            return "ID3 Chunk: %s" % self["tag"].display
+            return f'ID3 Chunk: {self["tag"].display}'
         else:
             return "ID3 Chunk: (terminator)"
 
@@ -466,8 +460,7 @@ class ID3v2(FieldSet):
             self._size = (self["size"].value + 10) * 8
 
     def createDescription(self):
-        return "ID3 v2.%s.%s" % \
-            (self["ver_major"].value, self["ver_minor"].value)
+        return f'ID3 v2.{self["ver_major"].value}.{self["ver_minor"].value}'
 
     def createFields(self):
         # Signature + version
@@ -479,7 +472,7 @@ class ID3v2(FieldSet):
         if self["header"].value != "ID3":
             raise MatchError("Signature error, should be \"ID3\".")
         if self["ver_major"].value not in self.VALID_MAJOR_VERSIONS \
-        or self["ver_minor"].value != 0:
+            or self["ver_minor"].value != 0:
             raise MatchError(
                 "Unknown ID3 metadata version (2.%u.%u)"
                 % (self["ver_major"].value, self["ver_minor"].value))
@@ -500,8 +493,6 @@ class ID3v2(FieldSet):
             if field["size"].value == 0:
                 break
 
-        # Search first byte of the MPEG file
-        padding = self.seekBit(self._size)
-        if padding:
+        if padding := self.seekBit(self._size):
             yield padding
 

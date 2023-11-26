@@ -57,9 +57,7 @@ class GzipParser(Parser):
             return "Invalid reserved[0] value"
         if self["reserved[1]"].value != 0:
             return "Invalid reserved[1] value"
-        if self["reserved[2]"].value != 0:
-            return "Invalid reserved[2] value"
-        return True
+        return "Invalid reserved[2] value" if self["reserved[2]"].value != 0 else True
 
     def createFields(self):
         # Gzip header
@@ -99,7 +97,7 @@ class GzipParser(Parser):
 
         # Read file
         size = (self._size - self.current_size) // 8 - 8  # -8: crc32+size
-        if 0 < size:
+        if size > 0:
             if self["has_filename"].value:
                 filename = self["filename"].value
             else:
@@ -120,10 +118,10 @@ class GzipParser(Parser):
         desc = u"gzip archive"
         info = []
         if "filename" in self:
-            info.append('filename "%s"' % self["filename"].value)
+            info.append(f'filename "{self["filename"].value}"')
         if "size" in self:
-            info.append("was %s" % self["size"].display)
+            info.append(f'was {self["size"].display}')
         if self["mtime"].value:
             info.append(self["mtime"].display)
-        return "%s: %s" % (desc, ", ".join(info))
+        return f'{desc}: {", ".join(info)}'
 

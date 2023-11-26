@@ -10,10 +10,7 @@ class RootSeekableFieldSet(BasicFieldSet):
         self._generator = self.createFields()
         self._offset = 0
         self._current_size = 0
-        if size:
-            self._current_max_size = size
-        else:
-            self._current_max_size = 0
+        self._current_max_size = size if size else 0
         self._field_dict = {}
         self._field_array = []
 
@@ -30,10 +27,14 @@ class RootSeekableFieldSet(BasicFieldSet):
         for field in self._field_array:
             if field.address <= address < field.address + field.size:
                 return field
-        for field in self._readFields():
-            if field.address <= address < field.address + field.size:
-                return field
-        return None
+        return next(
+            (
+                field
+                for field in self._readFields()
+                if field.address <= address < field.address + field.size
+            ),
+            None,
+        )
 
     def _stopFeed(self):
         self._size = self._current_max_size
@@ -80,11 +81,12 @@ class RootSeekableFieldSet(BasicFieldSet):
         if field._name.endswith("[]"):
             self.setUniqueFieldName(field)
         if config.debug:
-            self.info("[+] DBG: _addField(%s)" % field.name)
+            self.info(f"[+] DBG: _addField({field.name})")
 
         if field._address != self._offset:
-            self.warning("Set field %s address to %s (was %s)" % (
-                field.path, self._offset//8, field._address//8))
+            self.warning(
+                f"Set field {field.path} address to {self._offset // 8} (was {field._address // 8})"
+            )
             field._address = self._offset
         assert field.name not in self._field_dict
 
@@ -97,18 +99,14 @@ class RootSeekableFieldSet(BasicFieldSet):
         self._current_max_size = max(self._current_max_size, field.address + field.size)
 
     def _checkAddress(self, address):
-        if self._size is not None:
-            max_addr = self._size
-        else:
-            # FIXME: Use parent size
-            max_addr = self.stream.size
+        max_addr = self._size if self._size is not None else self.stream.size
         return address < max_addr
 
     def _checkFieldSize(self, field):
         size = field.size
         addr = field.address
         if not self._checkAddress(addr+size-1):
-            raise ParserError("Unable to add %s: field is too large" % field.name)
+            raise ParserError(f"Unable to add {field.name}: field is too large")
 
     def seekBit(self, address, relative=True):
         if not relative:
@@ -131,10 +129,10 @@ class RootSeekableFieldSet(BasicFieldSet):
 
     def _readFields(self):
         while True:
-            added = self._readMoreFields(xrange(1))
-            if not added:
+            if added := self._readMoreFields(xrange(1)):
+                yield self._field_array[-1]
+            else:
                 break
-            yield self._field_array[-1]
 
     def _readMoreFields(self, index_generator):
         added = 0
@@ -154,8 +152,7 @@ class RootSeekableFieldSet(BasicFieldSet):
     current_size = property(lambda self: self._offset)
 
     def __iter__(self):
-        for field in self._field_array:
-            yield field
+        yield from self._field_array
         if self._generator:
             try:
                 while True:

@@ -5,10 +5,7 @@ try:
 
     class DeflateStream:
         def __init__(self, stream, wbits=None):
-            if wbits:
-                self.gzip = decompressobj(-MAX_WBITS)
-            else:
-                self.gzip = decompressobj()
+            self.gzip = decompressobj(-MAX_WBITS) if wbits else decompressobj()
 
         def __call__(self, size, data=None):
             if data is None:

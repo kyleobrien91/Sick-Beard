@@ -104,13 +104,11 @@ def hashDict(d):
 def _genUniqueModuleName(baseModuleName):
     """The calling code is responsible for concurrency locking.
     """
-    if baseModuleName not in sys.modules:
-        finalName = baseModuleName
-    else:
-        finalName = ('cheetah_%s_%s_%s'%(baseModuleName,
-                                         str(time.time()).replace('.', '_'),
-                                         str(randrange(10000, 99999))))
-    return finalName
+    return (
+        baseModuleName
+        if baseModuleName not in sys.modules
+        else f"cheetah_{baseModuleName}_{str(time.time()).replace('.', '_')}_{str(randrange(10000, 99999))}"
+    )
 
 # Cache of a cgi.FieldStorage() instance, maintained by .webInput().
 # This is only relavent to templates used as CGI scripts.
@@ -146,9 +144,8 @@ class TemplatePreprocessor(object):
         settings = self._settings
         if not source: # @@TR: this needs improving
             if isinstance(file, (str, unicode)): # it's a filename.
-                f = open(file)
-                source = f.read()
-                f.close()
+                with open(file) as f:
+                    source = f.read()
             elif hasattr(file, 'read'):
                 source = file.read()
             file = None        
@@ -159,11 +156,11 @@ class TemplatePreprocessor(object):
             inspect.getargs(templateAPIClass.compile.im_func.func_code)[0]
             if arg not in ('klass', 'source', 'file',)]
 
-        compileKwArgs = {}
-        for arg in possibleKwArgs:
-            if hasattr(settings, arg):
-                compileKwArgs[arg] = getattr(settings, arg)
-
+        compileKwArgs = {
+            arg: getattr(settings, arg)
+            for arg in possibleKwArgs
+            if hasattr(settings, arg)
+        }
         tmplClass = templateAPIClass.compile(source=source, file=file, **compileKwArgs)
         tmplInstance = tmplClass(**settings.templateInitArgs)
         outputSource = settings.outputTransformer(tmplInstance)
@@ -318,12 +315,12 @@ class Template(Servlet):
     _CHEETAH_cacheStoreIdPrefix = None  
 
     @classmethod
-    def _getCompilerClass(klass, source=None, file=None):
-        return klass._CHEETAH_compilerClass
+    def _getCompilerClass(cls, source=None, file=None):
+        return cls._CHEETAH_compilerClass
 
     @classmethod
-    def _getCompilerSettings(klass, source=None, file=None):
-        return klass._CHEETAH_compilerSettings
+    def _getCompilerSettings(cls, source=None, file=None):
+        return cls._CHEETAH_compilerSettings
     
     @classmethod
     def compile(klass, source=None, file=None,
@@ -830,22 +827,19 @@ class Template(Servlet):
             return templateClass
 
     @classmethod
-    def subclass(klass, *args, **kws):
+    def subclass(cls, *args, **kws):
         """Takes the same args as the .compile() classmethod and returns a
         template that is a subclass of the template this method is called from.
 
           T1 = Template.compile(' foo - $meth1 - bar\n#def meth1: this is T1.meth1')
           T2 = T1.subclass('#implements meth1\n this is T2.meth1')
         """
-        kws['baseclass'] = klass
-        if isinstance(klass, Template):
-            templateAPIClass = klass
-        else:
-            templateAPIClass = Template
+        kws['baseclass'] = cls
+        templateAPIClass = cls if isinstance(cls, Template) else Template
         return templateAPIClass.compile(*args, **kws)
 
     @classmethod
-    def _preprocessSource(klass, source, file, preprocessors):
+    def _preprocessSource(cls, source, file, preprocessors):
         """Iterates through the .compile() classmethod's preprocessors argument
         and pipes the source code through each each preprocessor.
 
@@ -855,12 +849,12 @@ class Template(Servlet):
         if not isinstance(preprocessors, (list, tuple)):
             preprocessors = [preprocessors]
         for preprocessor in preprocessors:
-            preprocessor = klass._normalizePreprocessorArg(preprocessor)
+            preprocessor = cls._normalizePreprocessorArg(preprocessor)
             source, file = preprocessor.preprocess(source, file)
         return source, file
 
     @classmethod
-    def _normalizePreprocessorArg(klass, arg):
+    def _normalizePreprocessorArg(cls, arg):
         """Used to convert the items in the .compile() classmethod's
         preprocessors argument into real source preprocessors.  This permits the
         use of several shortcut forms for defining preprocessors.
@@ -874,20 +868,21 @@ class Template(Servlet):
                     return arg(source, file)
             return WrapperPreprocessor()
         else:
+
             class Settings(object):
                 placeholderToken = None
                 directiveToken = None
             settings = Settings()
-            if isinstance(arg, str) or isinstance(arg, (list, tuple)):
+            if isinstance(arg, (str, list, tuple)):
                 settings.tokens = arg
             elif isinstance(arg, dict):
                 for k, v in arg.items():
-                    setattr(settings, k, v)   
+                    setattr(settings, k, v)
             else:
                 settings = arg
 
-            settings = klass._normalizePreprocessorSettings(settings)
-            return klass._CHEETAH_defaultPreprocessorClass(settings)
+            settings = cls._normalizePreprocessorSettings(settings)
+            return cls._CHEETAH_defaultPreprocessorClass(settings)
 
         
     @classmethod
@@ -947,8 +942,7 @@ class Template(Servlet):
         return settings
 
     @classmethod
-    def _updateSettingsWithPreprocessTokens(
-        klass, compilerSettings, placeholderToken, directiveToken):
+    def _updateSettingsWithPreprocessTokens(cls, compilerSettings, placeholderToken, directiveToken):
         
         if (placeholderToken and 'cheetahVarStartToken' not in compilerSettings):
             compilerSettings['cheetahVarStartToken'] = placeholderToken
@@ -960,11 +954,9 @@ class Template(Servlet):
             if 'commentStartToken' not in compilerSettings:
                 compilerSettings['commentStartToken'] = directiveToken*2
             if 'multiLineCommentStartToken' not in compilerSettings:
-                compilerSettings['multiLineCommentStartToken'] = (
-                    directiveToken+'*')
+                compilerSettings['multiLineCommentStartToken'] = f'{directiveToken}*'
             if 'multiLineCommentEndToken' not in compilerSettings:
-                compilerSettings['multiLineCommentEndToken'] = (
-                    '*'+directiveToken)
+                compilerSettings['multiLineCommentEndToken'] = f'*{directiveToken}'
             if 'EOLSlurpToken' not in compilerSettings:
                 compilerSettings['EOLSlurpToken'] = directiveToken
 
@@ -988,9 +980,9 @@ class Template(Servlet):
             if not hasattr(concreteTemplateClass, classMethName):
                 meth = getattr(klass, classMethName)
                 setattr(concreteTemplateClass, classMethName, classmethod(meth.im_func))
-            
+
         for attrname in klass._CHEETAH_requiredCheetahClassAttributes:
-            attrname = '_CHEETAH_'+attrname
+            attrname = f'_CHEETAH_{attrname}'
             if not hasattr(concreteTemplateClass, attrname):
                 attrVal = getattr(klass, attrname)
                 setattr(concreteTemplateClass, attrname, attrVal)
@@ -998,25 +990,25 @@ class Template(Servlet):
         if (not hasattr(concreteTemplateClass, '__str__')
             or concreteTemplateClass.__str__ is object.__str__):
             
-            mainMethNameAttr = '_mainCheetahMethod_for_'+concreteTemplateClass.__name__
+            mainMethNameAttr = f'_mainCheetahMethod_for_{concreteTemplateClass.__name__}'
             mainMethName = getattr(concreteTemplateClass, mainMethNameAttr, None)
             if mainMethName:
                 def __str__(self): 
                     rc = getattr(self, mainMethName)()
-                    if isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    return rc
+                    return rc.encode('utf-8') if isinstance(rc, unicode) else rc
+
                 def __unicode__(self):
                     return getattr(self, mainMethName)()
+
             elif (hasattr(concreteTemplateClass, 'respond')
                   and concreteTemplateClass.respond!=Servlet.respond):
                 def __str__(self):
                     rc = self.respond()
-                    if isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    return rc
+                    return rc.encode('utf-8') if isinstance(rc, unicode) else rc
+
                 def __unicode__(self):
                     return self.respond()
+
             else:
                 def __str__(self):
                     rc = None
@@ -1026,9 +1018,8 @@ class Template(Servlet):
                         rc = self.respond()
                     else:
                         rc = super(self.__class__, self).__str__()
-                    if isinstance(rc, unicode):
-                        return rc.encode('utf-8')
-                    return rc
+                    return rc.encode('utf-8') if isinstance(rc, unicode) else rc
+
                 def __unicode__(self):
                     if hasattr(self, mainMethNameAttr):
                         return getattr(self, mainMethNameAttr)()
@@ -1036,7 +1027,7 @@ class Template(Servlet):
                         return self.respond()
                     else:
                         return super(self.__class__, self).__unicode__()
-                    
+
             __str__ = createMethod(__str__, concreteTemplateClass)
             __unicode__ = createMethod(__unicode__, concreteTemplateClass)
             setattr(concreteTemplateClass, '__str__', __str__)
@@ -1047,16 +1038,16 @@ class Template(Servlet):
 
                  namespaces=None, searchList=None,
                  # use either or.  They are aliases for the same thing.
-                 
+
                  file=None,
                  filter='RawOrEncodedUnicode', # which filter from Cheetah.Filters
                  filtersLib=Filters,
                  errorCatcher=None,
-                 
+
                  compilerSettings=Unspecified, # control the behaviour of the compiler
                  _globalSetVars=None, # used internally for #include'd templates
                  _preBuiltSearchList=None # used internally for #include'd templates
-                 ):        
+                 ):
         """a) compiles a new template OR b) instantiates an existing template.
 
         Read this docstring carefully as there are two distinct usage patterns.
@@ -1166,8 +1157,6 @@ class Template(Servlet):
 
         """
         errmsg = "arg '%s' must be %s"
-        errmsgextra = errmsg + "\n%s"
-
         if not isinstance(source, (types.NoneType, basestring)):
             raise TypeError(errmsg % ('source', 'string or None'))
 
@@ -1175,8 +1164,9 @@ class Template(Servlet):
             raise TypeError(errmsg %
                             ('file', 'string, file open for reading, or None'))
 
+        errmsgextra = errmsg + "\n%s"
         if not isinstance(filter, (basestring, types.TypeType)) and not \
-                (isinstance(filter, type) and issubclass(filter, Filters.Filter)):
+                    (isinstance(filter, type) and issubclass(filter, Filters.Filter)):
             raise TypeError(errmsgextra %
                             ('filter', 'string or class',
                              '(if class, must be subclass of Cheetah.Filters.Filter)'))
@@ -1185,12 +1175,12 @@ class Template(Servlet):
                             ('filtersLib', 'string or module',
                              '(if module, must contain subclasses of Cheetah.Filters.Filter)'))
 
-        if not errorCatcher is None:
+        if errorCatcher is not None:
             err = True
             if isinstance(errorCatcher, (basestring, types.TypeType)):
                 err = False
             if isinstance(errorCatcher, type) and \
-                    issubclass(errorCatcher, ErrorCatchers.ErrorCatcher): 
+                        issubclass(errorCatcher, ErrorCatchers.ErrorCatcher): 
                 err = False
             if err:
                 raise TypeError(errmsgextra %
@@ -1200,11 +1190,11 @@ class Template(Servlet):
             if not isinstance(compilerSettings, types.DictType):
                 raise TypeError(errmsg %
                                 ('compilerSettings', 'dictionary'))
-        
+
         if source is not None and file is not None:
             raise TypeError("you must supply either a source string or the" + 
                             " 'file' keyword argument, but not both")
-                    
+
         ##################################################           
         ## Do superclass initialization.
         super(Template, self).__init__()
@@ -1218,14 +1208,13 @@ class Template(Servlet):
                 compiledVersionTuple = convertVersionStringToTuple(compiledVersion)
                 if compiledVersionTuple < MinCompatibleVersionTuple:
                     raise AssertionError(
-                     'This template was compiled with Cheetah version'
-                     ' %s. Templates compiled before version %s must be recompiled.'%(
-                        compiledVersion, MinCompatibleVersion))                    
+                        f'This template was compiled with Cheetah version {compiledVersion}. Templates compiled before version {MinCompatibleVersion} must be recompiled.'
+                    )
             except AssertionError:
-                raise 
+                raise
             except:
                 pass
-        
+
         ##################################################           
         ## Setup instance state attributes used during the life of template
         ## post-compile
@@ -1240,10 +1229,10 @@ class Template(Servlet):
                         warn = False
                     if warn:
                         logging.info(''' The following keys are members of the Template class and will result in NameMapper collisions! ''')
-                        logging.info('''  > %s ''' % ', '.join(list(intersection)))
+                        logging.info(f'''  > {', '.join(list(intersection))} ''')
                         logging.info(''' Please change the key's name or use the compiler setting "prioritizeSearchListOverSelf=True" to prevent the NameMapper from using ''')
                         logging.info(''' the Template member in place of your searchList variable ''')
-                        
+
 
         self._initCheetahInstance(
             searchList=searchList, namespaces=namespaces,
@@ -1252,7 +1241,7 @@ class Template(Servlet):
             _globalSetVars=_globalSetVars,
             compilerSettings=compilerSettings,
             _preBuiltSearchList=_preBuiltSearchList)
-        
+
         ##################################################
         ## Now, compile if we're meant to
         if (source is not None) or (file is not None):
@@ -1299,7 +1288,7 @@ class Template(Servlet):
         if self._CHEETAH_cacheStoreIdPrefix is not None:            
             return self._CHEETAH_cacheStoreIdPrefix
         else:
-            return str(id(self))
+            return id(self)
     
     def _createCacheRegion(self, regionID):
         return self._CHEETAH_cacheRegionClass(
@@ -1324,7 +1313,7 @@ class Template(Servlet):
         # returns a copy to prevent users mucking it up
         return self._CHEETAH__cacheRegions.copy()
 
-    def refreshCache(self, cacheRegionId=None, cacheItemId=None):        
+    def refreshCache(self, cacheRegionId=None, cacheItemId=None):
         """Refresh a cache region or a specific cache item within a region.
         """
         
@@ -1337,10 +1326,8 @@ class Template(Servlet):
                 return
             if not cacheItemId: # clear the desired region and all its cacheItems
                 cregion.clear()
-            else: # clear one specific cache of a specific region
-                cache = cregion.getCacheItem(cacheItemId)
-                if cache:
-                    cache.clear()
+            elif cache := cregion.getCacheItem(cacheItemId):
+                cache.clear()
                     
     ## end cache methods ##
                     
@@ -1423,9 +1410,8 @@ class Template(Servlet):
         various protocols, as PHP allows with its 'URL fopen wrapper'
         """
         
-        fp = open(path, 'r')
-        output = fp.read()
-        fp.close()
+        with open(path, 'r') as fp:
+            output = fp.read()
         return output
     
     def runAsMainProgram(self):        
@@ -1536,7 +1522,7 @@ class Template(Servlet):
         instead.
         """
         if compilerSettings is Unspecified:
-            compilerSettings = self._getCompilerSettings(source, file) or {}        
+            compilerSettings = self._getCompilerSettings(source, file) or {}
         mainMethodName = mainMethodName or self._CHEETAH_defaultMainMethodName
         self._fileMtime = None
         self._fileDirName = None
@@ -1552,7 +1538,7 @@ class Template(Servlet):
                                       compilerSettings=compilerSettings,
                                       keepRefToGeneratedCode=True)
 
-        if not self.__class__ == Template:
+        if self.__class__ != Template:
             # Only propogate attributes if we're in a subclass of 
             # Template
             for k, v in self.__class__.__dict__.iteritems():
@@ -1568,14 +1554,14 @@ class Template(Servlet):
         templateClass.__init__(self,
                                #_globalSetVars=self._CHEETAH__globalSetVars,
                                #_preBuiltSearchList=self._CHEETAH__searchList
-                               )                               
+                               )
         if not hasattr(self, 'transaction'):
             self.transaction = None
 
-    def _handleCheetahInclude(self, srcArg, trans=None, includeFrom='file', raw=False):        
+    def _handleCheetahInclude(self, srcArg, trans=None, includeFrom='file', raw=False):
         """Called at runtime to handle #include directives.
         """
-        _includeID = srcArg            
+        _includeID = srcArg
         if _includeID not in self._CHEETAH__cheetahIncludes:
             if not raw:
                 if includeFrom == 'file':
@@ -1604,12 +1590,11 @@ class Template(Servlet):
                 nestedTemplate._CHEETAH__initialFilter = self._CHEETAH__initialFilter
                 nestedTemplate._CHEETAH__currentFilter = self._CHEETAH__initialFilter   
                 self._CHEETAH__cheetahIncludes[_includeID] = nestedTemplate
+            elif includeFrom == 'file':
+                path = self.serverSidePath(srcArg)
+                self._CHEETAH__cheetahIncludes[_includeID] = self.getFileContents(path)
             else:
-                if includeFrom == 'file':
-                    path = self.serverSidePath(srcArg)
-                    self._CHEETAH__cheetahIncludes[_includeID] = self.getFileContents(path)
-                else:
-                    self._CHEETAH__cheetahIncludes[_includeID] = srcArg
+                self._CHEETAH__cheetahIncludes[_includeID] = srcArg
         ##
         if not raw:
             self._CHEETAH__cheetahIncludes[_includeID].respond(trans)
@@ -1623,10 +1608,7 @@ class Template(Servlet):
         This abstraction allows different compiler settings to be used in the
         included template than were used in the parent.
         """
-        if issubclass(self.__class__, Template):
-            return self.__class__
-        else:
-            return Template
+        return self.__class__ if issubclass(self.__class__, Template) else Template
 
     ## functions for using templates as CGI scripts
     def webInput(self, names, namesMulti=(), default='', src='f',
@@ -1811,7 +1793,7 @@ class Template(Servlet):
         """ 
         src = src.lower()
         isCgi = not self._CHEETAH__isControlledByWebKit
-        if   isCgi and src in ('f', 'v'):
+        if isCgi and src in ('f', 'v'):
             global _formUsedByWebInput
             if _formUsedByWebInput is None:
                 _formUsedByWebInput = cgi.FieldStorage()
@@ -1822,8 +1804,6 @@ class Template(Servlet):
             raise RuntimeError("can't get session variables from a CGI script")
         elif isCgi and src == 'v':
             source, func = 'value',   self.request().value
-        elif isCgi and src == 's':
-            source, func = 'session', self.request().session().value
         elif src == 'f':
             source, func = 'field',   self.request().field
         elif src == 'c':
@@ -1834,7 +1814,7 @@ class Template(Servlet):
             source, func = 'session', self.request().session().value
         else:
             raise TypeError("arg 'src' invalid")
-        sources = source + 's'
+        sources = f'{source}s'
         converters = {
             '': _Converter('string', None, default,      default ),
             'int': _Converter('int',     int, defaultInt,   badInt  ),
@@ -1864,46 +1844,48 @@ Template.Reserved_SearchList = set(dir(Template))
 def genParserErrorFromPythonException(source, file, generatedPyCode, exception):
 
     #print dir(exception)
-    
+
     filename = isinstance(file, (str, unicode)) and file or None
 
     sio = StringIO.StringIO()
     traceback.print_exc(1, sio)
     formatedExc = sio.getvalue()
-    
+
     if hasattr(exception, 'lineno'):
         pyLineno = exception.lineno
     else:
         pyLineno = int(re.search('[ \t]*File.*line (\d+)', formatedExc).group(1))
-       
+
     lines = generatedPyCode.splitlines()
-    
+
     prevLines = []                  # (i, content)
     for i in range(1, 4):
         if pyLineno-i <=0:
             break
         prevLines.append( (pyLineno+1-i, lines[pyLineno-i]) )
-    
+
     nextLines = []                  # (i, content)
     for i in range(1, 4):
-        if not pyLineno+i < len(lines):
+        if pyLineno + i >= len(lines):
             break
         nextLines.append( (pyLineno+i, lines[pyLineno+i]) )
     nextLines.reverse()
-    report = 'Line|Python Code\n'
-    report += '----|-------------------------------------------------------------\n'
+    report = (
+        'Line|Python Code\n'
+        + '----|-------------------------------------------------------------\n'
+    )
     while prevLines:
         lineInfo = prevLines.pop()
         report += "%(row)-4d|%(line)s\n"% {'row':lineInfo[0], 'line':lineInfo[1]}
 
     if hasattr(exception, 'offset'):
         report += ' '*(3+(exception.offset or 0)) + '^\n'
-    
+
     while nextLines:
         lineInfo = nextLines.pop()
         report += "%(row)-4d|%(line)s\n"% {'row':lineInfo[0], 'line':lineInfo[1]}
-    
-    
+
+
     message = [
         "Error in the Python code which Cheetah generated for this template:",
         '='*80,
@@ -1913,8 +1895,7 @@ def genParserErrorFromPythonException(source, file, generatedPyCode, exception):
         report,
         '='*80,
         ]
-    cheetahPosMatch = re.search('line (\d+), col (\d+)', formatedExc)
-    if cheetahPosMatch:
+    if cheetahPosMatch := re.search('line (\d+), col (\d+)', formatedExc):
         lineno = int(cheetahPosMatch.group(1))
         col = int(cheetahPosMatch.group(2))
         #if hasattr(exception, 'offset'):
@@ -1923,16 +1904,18 @@ def genParserErrorFromPythonException(source, file, generatedPyCode, exception):
     else:
         lineno = None
         col = None
-        cheetahPosMatch = re.search('line (\d+), col (\d+)',
-                                    '\n'.join(lines[max(pyLineno-2, 0):]))
-        if cheetahPosMatch:
+        if cheetahPosMatch := re.search(
+            'line (\d+), col (\d+)', '\n'.join(lines[max(pyLineno - 2, 0) :])
+        ):
             lineno = int(cheetahPosMatch.group(1))
             col = int(cheetahPosMatch.group(2))
-            message.append('\nHere is the corresponding Cheetah code.')
-            message.append('** I had to guess the line & column numbers,'
-                           ' so they are probably incorrect:\n')
-
-    
+            message.extend(
+                (
+                    '\nHere is the corresponding Cheetah code.',
+                    '** I had to guess the line & column numbers,'
+                    ' so they are probably incorrect:\n',
+                )
+            )
     message = '\n'.join(message)
     reader = SourceReader(source, filename=filename)
     return ParseError(reader, message, lineno=lineno, col=col)

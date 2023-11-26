@@ -137,7 +137,7 @@ class Session(object):
         # os.urandom not available until Python 2.4. Fall back to random.random.
         def generate_id(self):
             """Return a new session id."""
-            return sha('%s' % random.random()).hexdigest()
+            return sha(f'{random.random()}').hexdigest()
     else:
         def generate_id(self):
             """Return a new session id."""
@@ -152,10 +152,9 @@ class Session(object):
                 t = datetime.timedelta(seconds=self.timeout * 60)
                 expiration_time = datetime.datetime.now() + t
                 if self.debug:
-                    cherrypy.log('Saving with expiry %s' % expiration_time,
-                                 'TOOLS.SESSIONS')
+                    cherrypy.log(f'Saving with expiry {expiration_time}', 'TOOLS.SESSIONS')
                 self._save(expiration_time)
-            
+
         finally:
             if self.locked:
                 # Always release the lock if the user didn't release it
@@ -322,7 +321,7 @@ class FileSession(Session):
         kwargs['storage_path'] = os.path.abspath(kwargs['storage_path'])
         Session.__init__(self, id=id, **kwargs)
     
-    def setup(cls, **kwargs):
+    def setup(self, **kwargs):
         """Set up the storage system for file-based sessions.
         
         This should only be called once per process; this will be done
@@ -330,20 +329,25 @@ class FileSession(Session):
         """
         # The 'storage_path' arg is required for file-based sessions.
         kwargs['storage_path'] = os.path.abspath(kwargs['storage_path'])
-        
+
         for k, v in kwargs.items():
-            setattr(cls, k, v)
-        
-        # Warn if any lock files exist at startup.
-        lockfiles = [fname for fname in os.listdir(cls.storage_path)
-                     if (fname.startswith(cls.SESSION_PREFIX)
-                         and fname.endswith(cls.LOCK_SUFFIX))]
-        if lockfiles:
+            setattr(self, k, v)
+
+        if lockfiles := [
+            fname
+            for fname in os.listdir(cls.storage_path)
+            if (
+                fname.startswith(cls.SESSION_PREFIX)
+                and fname.endswith(cls.LOCK_SUFFIX)
+            )
+        ]:
             plural = ('', 's')[len(lockfiles) > 1]
-            warn("%s session lockfile%s found at startup. If you are "
-                 "only running one process, then you may need to "
-                 "manually delete the lockfiles found at %r."
-                 % (len(lockfiles), plural, cls.storage_path))
+            warn(
+                "%s session lockfile%s found at startup. If you are "
+                "only running one process, then you may need to "
+                "manually delete the lockfiles found at %r."
+                % (len(lockfiles), plural, self.storage_path)
+            )
     setup = classmethod(setup)
     
     def _get_file_path(self):
@@ -527,17 +531,17 @@ class MemcachedSession(Session):
     
     servers = ['127.0.0.1:11211']
     
-    def setup(cls, **kwargs):
+    def setup(self, **kwargs):
         """Set up the storage system for memcached-based sessions.
         
         This should only be called once per process; this will be done
         automatically when using sessions.init (as the built-in Tool does).
         """
         for k, v in kwargs.items():
-            setattr(cls, k, v)
-        
+            setattr(self, k, v)
+
         import memcache
-        cls.cache = memcache.Client(cls.servers)
+        self.cache = memcache.Client(self.servers)
     setup = classmethod(setup)
     
     def _exists(self):
@@ -649,12 +653,12 @@ def init(storage_type='ram', path=None, path_header=None, name='session_id',
     """
     
     request = cherrypy.serving.request
-    
+
     # Guard against running twice
     if hasattr(request, "_session_init_flag"):
         return
     request._session_init_flag = True
-    
+
     # Check if request came with a session ID
     id = None
     if name in request.cookie:
@@ -662,14 +666,14 @@ def init(storage_type='ram', path=None, path_header=None, name='session_id',
         if debug:
             cherrypy.log('ID obtained from request.cookie: %r' % id,
                          'TOOLS.SESSIONS')
-    
+
     # Find the storage class and call setup (first time only).
-    storage_class = storage_type.title() + 'Session'
+    storage_class = f'{storage_type.title()}Session'
     storage_class = globals()[storage_class]
     if not hasattr(cherrypy, "session"):
         if hasattr(storage_class, "setup"):
             storage_class.setup(**kwargs)
-    
+
     # Create and attach a new Session instance to cherrypy.serving.
     # It will possess a reference to (and lock, and lazily load)
     # the requested session data.
@@ -680,18 +684,14 @@ def init(storage_type='ram', path=None, path_header=None, name='session_id',
     def update_cookie(id):
         """Update the cookie every time the session id changes."""
         cherrypy.serving.response.cookie[name] = id
+
     sess.id_observers.append(update_cookie)
-    
+
     # Create cherrypy.session which will proxy to cherrypy.serving.session
     if not hasattr(cherrypy, "session"):
         cherrypy.session = cherrypy._ThreadLocalProxy('session')
-    
-    if persistent:
-        cookie_timeout = timeout
-    else:
-        # See http://support.microsoft.com/kb/223799/EN-US/
-        # and http://support.mozilla.com/en-US/kb/Cookies
-        cookie_timeout = None
+
+    cookie_timeout = timeout if persistent else None
     set_response_cookie(path=path, path_header=path_header, name=name,
                         timeout=cookie_timeout, domain=domain, secure=secure)
 

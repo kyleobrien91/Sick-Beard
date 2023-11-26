@@ -46,9 +46,8 @@ class CheetahDirOwner(DirOwner):
 
     def getmod(self, name):
         self._acquireLock()
-        try:        
-            mod = DirOwner.getmod(self, name)
-            if mod:
+        try:    
+            if mod := DirOwner.getmod(self, name):
                 return mod
 
             for ext in self.templateFileExtensions:

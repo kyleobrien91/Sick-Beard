@@ -37,7 +37,7 @@ def parseID3(self):
 
 def parseComment(self):
     yield UInt16(self, "nb_comment")
-    for index in xrange(self["nb_comment"].value):
+    for _ in xrange(self["nb_comment"].value):
         yield Comment(self, "comment[]")
 
 def parseCommon(self):
@@ -53,8 +53,7 @@ def parseVersion(self):
 def parseSound(self):
     yield UInt32(self, "offset")
     yield UInt32(self, "block_size")
-    size = (self.size - self.current_size) // 8
-    if size:
+    if size := (self.size - self.current_size) // 8:
         yield RawBytes(self, "data", size)
 
 class Chunk(FieldSet):
@@ -80,11 +79,9 @@ class Chunk(FieldSet):
     def createFields(self):
         yield String(self, "type", 4, "Signature (FORM)", charset="ASCII")
         yield filesizeHandler(UInt32(self, "size"))
-        size = self["size"].value
-        if size:
+        if size := self["size"].value:
             if self._parser:
-                for field in self._parser(self):
-                    yield field
+                yield from self._parser(self)
                 if size % 2:
                     yield NullBytes(self, "padding", 1)
             else:
@@ -104,9 +101,7 @@ class HeightSVX(Parser):
     def validate(self):
         if self.stream.readBytes(0, 4) != "FORM":
             return "Invalid signature"
-        if self.stream.readBytes(8*8, 4) != "8SVX":
-            return "Invalid type"
-        return True
+        return "Invalid type" if self.stream.readBytes(8*8, 4) != "8SVX" else True
 
     def createFields(self):
         yield String(self, "signature", 4, "Signature (FORM)", charset="ASCII")

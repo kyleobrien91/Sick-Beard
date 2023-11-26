@@ -21,7 +21,7 @@ class RawBytes(Field):
     def __init__(self, parent, name, length, description="Raw data"):
         assert issubclass(parent.__class__, Field)
         if not(0 < length <= MAX_LENGTH):
-            raise FieldError("Invalid RawBytes length (%s)!" % length)
+            raise FieldError(f"Invalid RawBytes length ({length})!")
         Field.__init__(self, parent, name, length*8, description)
         self._display = None
 
@@ -42,10 +42,7 @@ class RawBytes(Field):
             return makePrintable(display, "latin-1", quote='"', to_unicode=True)
         else:
             display = str2hex(display, format=r"\x%02x")
-            if truncated:
-                return '"%s(...)"' % display
-            else:
-                return '"%s"' % display
+            return f'"{display}(...)"' if truncated else f'"{display}"'
 
     def createDisplay(self):
         return self._createDisplay(True)

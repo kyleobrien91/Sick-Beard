@@ -45,7 +45,7 @@ def bin2long(text, endian):
     assert endian in (LITTLE_ENDIAN, BIG_ENDIAN)
     bits = [ (ord(character)-ord("0")) \
         for character in text if character in "01" ]
-    assert len(bits) != 0
+    assert bits
     if endian is not BIG_ENDIAN:
         bits = reversed(bits)
     value = 0
@@ -69,12 +69,8 @@ def str2hex(value, prefix="", glue=u"", format="%02X"):
     """
     if isinstance(glue, str):
         glue = unicode(glue)
-    if 0 < len(prefix):
-        text = [prefix]
-    else:
-        text = []
-    for character in value:
-        text.append(format % ord(character))
+    text = [prefix] if len(prefix) > 0 else []
+    text.extend(format % ord(character) for character in value)
     return glue.join(text)
 
 def countBits(value):
@@ -97,7 +93,7 @@ def countBits(value):
         count  += bits
         value >>= bits
         bits <<= 1
-    while 2 <= value:
+    while value >= 2:
         if bits != 1:
             bits >>= 1
         else:
@@ -119,14 +115,8 @@ def byte2bin(number, classic_mode=True):
     """
     text = ""
     for i in range(0, 8):
-        if classic_mode:
-            mask = 1 << (7-i)
-        else:
-            mask = 1 << i
-        if (number & mask) == mask:
-            text += "1"
-        else:
-            text += "0"
+        mask = 1 << (7-i) if classic_mode else 1 << i
+        text += "1" if (number & mask) == mask else "0"
     return text
 
 def long2raw(value, endian, size=None):
@@ -141,25 +131,22 @@ def long2raw(value, endian, size=None):
     >>> long2raw(0x1219, LITTLE_ENDIAN, 4)   # 32 bits
     '\x19\x12\x00\x00'
     """
-    assert (not size and 0 < value) or (0 <= value)
+    assert not size and value > 0 or value >= 0
     assert endian in (LITTLE_ENDIAN, BIG_ENDIAN)
     text = []
     while (value != 0 or text == ""):
         byte = value % 256
         text.append( chr(byte) )
         value >>= 8
-    if size:
-        need = max(size - len(text), 0)
-    else:
-        need = 0
+    need = max(size - len(text), 0) if size else 0
     if need:
-        if endian is BIG_ENDIAN:
-            text = chain(repeat("\0", need), reversed(text))
-        else:
-            text = chain(text, repeat("\0", need))
-    else:
-        if endian is BIG_ENDIAN:
-            text = reversed(text)
+        text = (
+            chain(repeat("\0", need), reversed(text))
+            if endian is BIG_ENDIAN
+            else chain(text, repeat("\0", need))
+        )
+    elif endian is BIG_ENDIAN:
+        text = reversed(text)
     return "".join(text)
 
 def long2bin(size, value, endian, classic_mode=False):
@@ -183,11 +170,8 @@ def long2bin(size, value, endian, classic_mode=False):
     text = ""
     assert endian in (LITTLE_ENDIAN, BIG_ENDIAN)
     assert 0 <= value
-    for index in xrange(size):
-        if (value & 1) == 1:
-            text += "1"
-        else:
-            text += "0"
+    for _ in xrange(size):
+        text += "1" if (value & 1) == 1 else "0"
         value >>= 1
     if endian is LITTLE_ENDIAN:
         text = text[::-1]
@@ -195,10 +179,7 @@ def long2bin(size, value, endian, classic_mode=False):
     while len(text) != 0:
         if len(result) != 0:
             result += " "
-        if classic_mode:
-            result += text[7::-1]
-        else:
-            result += text[:8]
+        result += text[7::-1] if classic_mode else text[:8]
         text = text[8:]
     return result
 
@@ -232,8 +213,8 @@ def _createStructFormat():
     for struct_format in "BHILQ":
         try:
             size = calcsize(struct_format)
-            format[BIG_ENDIAN][size] = '>%s' % struct_format
-            format[LITTLE_ENDIAN][size] = '<%s' % struct_format
+            format[BIG_ENDIAN][size] = f'>{struct_format}'
+            format[LITTLE_ENDIAN][size] = f'<{struct_format}'
         except struct_error:
             pass
     return format

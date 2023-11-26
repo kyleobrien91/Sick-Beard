@@ -31,13 +31,12 @@ class Filter(object):
         if isinstance(val, unicode):
             # ignore the encoding and return the unicode object
             return val
-        else:
-            try:
-                return unicode(val)
-            except UnicodeDecodeError:
-                # we could put more fallbacks here, but we'll just pass the str
-                # on and let DummyTransaction worry about it
-                return str(val)
+        try:
+            return unicode(val)
+        except UnicodeDecodeError:
+            # we could put more fallbacks here, but we'll just pass the str
+            # on and let DummyTransaction worry about it
+            return str(val)
 
 RawOrEncodedUnicode = Filter
 
@@ -139,10 +138,7 @@ class WebSafe(Filter):
             also = kw['also']
             entities = webSafeEntities   # Global variable.
             for k in also:
-                if k in entities:
-                    v = entities[k]
-                else:
-                    v = "&#%s;" % ord(k)
+                v = entities[k] if k in entities else f"&#{ord(k)};"
                 s = s.replace(k, v)
         return s
 
@@ -171,8 +167,7 @@ class Strip(Filter):
             if end == -1:  # If no more newlines.
                 break
             chunk = s[start:end].strip()
-            result.append(chunk)
-            result.append('\n')
+            result.extend((chunk, '\n'))
             start = end + 1
         # Write the unfinished portion after the last newline, if any.
         chunk = s[start:].strip()

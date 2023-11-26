@@ -44,15 +44,12 @@ class MSDOSFileAttr16(StaticFieldSet):
         mode = []
         for name in self._text_keys:
             if self[name].value:
-                if 4 <= len(mode):
+                if len(mode) >= 4:
                     mode.append("...")
                     break
                 else:
                     mode.append(name)
-        if mode:
-            return ", ".join(mode)
-        else:
-            return "(none)"
+        return ", ".join(mode) if mode else "(none)"
 
 class MSDOSFileAttr32(MSDOSFileAttr16):
     """

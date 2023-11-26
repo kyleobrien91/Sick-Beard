@@ -56,9 +56,7 @@ class HachoirParser(object):
 
         If it returns None, "application/octet-stream" is used.
         """
-        if "mime" in self.PARSER_TAGS:
-            return self.PARSER_TAGS["mime"][0]
-        return None
+        return self.PARSER_TAGS["mime"][0] if "mime" in self.PARSER_TAGS else None
 
     def validate(self):
         """
@@ -118,7 +116,7 @@ class HachoirParser(object):
         file_ext = self.getParserTags().get("file_ext")
         if isinstance(file_ext, (tuple, list)):
             file_ext = file_ext[0]
-        return file_ext and '.' + file_ext
+        return file_ext and f'.{file_ext}'
     def _getFilenameSuffix(self):
         if not hasattr(self, "_filename_suffix"):
             self._filename_extension = self.createFilenameSuffix()

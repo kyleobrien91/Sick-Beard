@@ -42,14 +42,12 @@ class DirectoryEntry(FieldSet):
         yield UInt8(self, "name_len", "Name length")
         yield Enum(UInt8(self, "file_type", "File type"), self.file_type)
         yield String(self, "name", self["name_len"].value, "File name")
-        size = (self._size - self.current_size)//8
-        if size:
+        if size := (self._size - self.current_size) // 8:
             yield NullBytes(self, "padding", size)
 
     def createDescription(self):
-        name = self["name"].value.strip("\0")
-        if name:
-            return "Directory entry: %s" % name
+        if name := self["name"].value.strip("\0"):
+            return f"Directory entry: {name}"
         else:
             return "Directory entry (empty)"
 
@@ -87,20 +85,19 @@ class Inode(FieldSet):
         self.uniq_id = 1+index
 
     def createDescription(self):
-        desc = "Inode %s: " % self.uniq_id
+        desc = f"Inode {self.uniq_id}: "
         size = self["size"].value
         if self["blocks"].value == 0:
             desc += "(unused)"
-        elif 11 <= self.uniq_id:
+        elif self.uniq_id >= 11:
             size = humanFilesize(size)
-            desc += "file, size=%s, mode=%s" % (size, self.getMode())
+            desc += f"file, size={size}, mode={self.getMode()}"
+        elif self.uniq_id in self.inode_type_name:
+            desc += self.inode_type_name[self.uniq_id]
+            if self.uniq_id == 2:
+                desc += f" ({self.getMode()})"
         else:
-            if self.uniq_id in self.inode_type_name:
-                desc += self.inode_type_name[self.uniq_id]
-                if self.uniq_id == 2:
-                    desc += " (%s)" % self.getMode()
-            else:
-                desc += "special"
+            desc += "special"
         return desc
 
     def getMode(self):
@@ -109,7 +106,7 @@ class Inode(FieldSet):
             ("group_read", "group_write", "group_exec"),
             ("other_read", "other_write", "other_exec"))
         letters = "rwx"
-        mode = [ "-"  for index in xrange(10) ]
+        mode = ["-" for _ in xrange(10)]
         index = 1
         for loop in xrange(3):
             for name, letter in izip(names[loop], letters):
@@ -148,7 +145,7 @@ class Inode(FieldSet):
         yield UInt32(self, "blocks", "Number of blocks")
         yield UInt32(self, "flags", "Flags")
         yield NullBytes(self, "reserved[]", 4, "Reserved")
-        for index in xrange(15):
+        for _ in xrange(15):
             yield UInt32(self, "block[]")
         yield UInt32(self, "version", "Version")
         yield UInt32(self, "file_acl", "File ACL")
@@ -175,13 +172,13 @@ class Inode(FieldSet):
 
 class Bitmap(FieldSet):
     def __init__(self, parent, name, start, size, description, **kw):
-        description = "%s: %s items" % (description, size)
+        description = f"{description}: {size} items"
         FieldSet.__init__(self, parent, name, description, size=size, **kw)
         self.start = 1+start
 
     def createFields(self):
         for index in xrange(self._size):
-            yield Bit(self, "item[]", "Item %s" % (self.start+index))
+            yield Bit(self, "item[]", f"Item {self.start + index}")
 
 BlockBitmap = Bitmap
 InodeBitmap = Bitmap
@@ -197,7 +194,7 @@ class GroupDescriptor(FieldSet):
         blocks_per_group = self["/superblock/blocks_per_group"].value
         start = self.uniq_id * blocks_per_group
         end = start + blocks_per_group
-        return "Group descriptor: blocks %s-%s" % (start, end)
+        return f"Group descriptor: blocks {start}-{end}"
 
     def createFields(self):
         yield UInt32(self, "block_bitmap", "Points to the blocks bitmap block")
@@ -234,11 +231,8 @@ class SuperBlock(FieldSet):
         self._group_count = None
 
     def createDescription(self):
-        if self["feature_compat"].value & 4:
-            fstype = "ext3"
-        else:
-            fstype = "ext2"
-        return "Superblock: %s file system" % fstype
+        fstype = "ext3" if self["feature_compat"].value & 4 else "ext2"
+        return f"Superblock: {fstype} file system"
 
     def createFields(self):
         yield UInt32(self, "inodes_count", "Inodes count")
@@ -302,7 +296,7 @@ class GroupDescriptors(FieldSet):
         self.count = count
 
     def createDescription(self):
-        return "Group descriptors: %s items" % self.count
+        return f"Group descriptors: {self.count} items"
 
     def createFields(self):
         for index in range(0, self.count):
@@ -316,7 +310,7 @@ class InodeTable(FieldSet):
         self._size = self.count * self["/superblock/inode_size"].value * 8
 
     def createDescription(self):
-        return "Group descriptors: %s items" % self.count
+        return f"Group descriptors: {self.count} items"
 
     def createFields(self):
         for index in range(self.start, self.start+self.count):
@@ -328,7 +322,7 @@ class Group(FieldSet):
         self.uniq_id = index
 
     def createDescription(self):
-        desc = "Group %s: %s" % (self.uniq_id, humanFilesize(self.size/8))
+        desc = f"Group {self.uniq_id}: {humanFilesize(self.size / 8)}"
         if "superblock_copy" in self:
             desc += " (with superblock copy)"
         return desc
@@ -356,21 +350,19 @@ class Group(FieldSet):
         block_count = min(block_count, superblock["blocks_count"].value - block_index)
         inode_count = min(inode_count, superblock["inodes_count"].value - inode_index)
 
-        # Read block bitmap
-        field = self.seekByte(group["block_bitmap"].value * block_size, relative=False, null=True)
-        if field:
+        if field := self.seekByte(
+            group["block_bitmap"].value * block_size, relative=False, null=True
+        ):
             yield field
         yield BlockBitmap(self, "block_bitmap", block_index, block_count, "Block bitmap")
 
-        # Read inode bitmap
-        field = self.seekByte(group["inode_bitmap"].value * block_size, relative=False)
-        if field:
+        if field := self.seekByte(
+            group["inode_bitmap"].value * block_size, relative=False
+        ):
             yield field
         yield InodeBitmap(self, "inode_bitmap", inode_index, inode_count, "Inode bitmap")
 
-        # Read inode table
-        field = self.seekByte(alignValue(self.current_size//8, block_size))
-        if field:
+        if field := self.seekByte(alignValue(self.current_size // 8, block_size)):
             yield field
         yield InodeTable(self, "inode_table", inode_index, inode_count)
 
@@ -426,17 +418,17 @@ class EXT2_FS(Parser):
             raise ParserError("EXT2: Invalid (log) block size")
         self.block_size = 1024 << superblock["log_block_size"].value # in bytes
 
-        # Read groups' descriptor
-        field = self.seekByte(((1023 + superblock.size/8) / self.block_size + 1) * self.block_size, null=True)
-        if field:
+        if field := self.seekByte(
+            ((1023 + superblock.size / 8) / self.block_size + 1) * self.block_size,
+            null=True,
+        ):
             yield field
         groups = GroupDescriptors(self, "group_desc", superblock.group_count)
         yield groups
 
         # Read groups
         address = groups["group[0]/block_bitmap"].value * self.block_size
-        field = self.seekByte(address, null=True)
-        if field:
+        if field := self.seekByte(address, null=True):
             yield field
         for index in range(0, superblock.group_count):
             yield Group(self, "group[]", index)
@@ -453,12 +445,10 @@ class EXT2_FS(Parser):
         used = (superblock["free_blocks_count"].value) * block_size
         desc = "EXT2/EXT3"
         if "group[0]/inode_table/inode[7]/blocks" in self:
-            if 0 < self["group[0]/inode_table/inode[7]/blocks"].value:
+            if self["group[0]/inode_table/inode[7]/blocks"].value > 0:
                 desc = "EXT3"
             else:
                 desc = "EXT2"
-        return desc + " file system: total=%s, used=%s, block=%s" % (
-            humanFilesize(total), humanFilesize(used),
-            humanFilesize(block_size))
+        return f"{desc} file system: total={humanFilesize(total)}, used={humanFilesize(used)}, block={humanFilesize(block_size)}"
 
 

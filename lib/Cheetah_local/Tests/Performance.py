@@ -57,15 +57,16 @@ def perftest(max_num_pystones, current_pystone=None):
                     pystone_total_time = total_time / pystone_rate
                 global DEBUG
                 if DEBUG:
-                    print('The test "%s" took: %s pystones' % (function.func_name,
-                        pystone_total_time))
+                    print(f'The test "{function.func_name}" took: {pystone_total_time} pystones')
                 else:
                     if pystone_total_time > (max_num_pystones + TOLERANCE):
                         raise DurationError((('Test too long (%.2f Ps, '
                                         'need at most %.2f Ps)')
                                         % (pystone_total_time,
                                             max_num_pystones)))
+
         return wrapper
+
     return _test
 
 
@@ -78,7 +79,7 @@ class DynamicTemplatePerformanceTest(unittest.TestCase):
                 #pass
             #end def
         '''
-        for i in range(self.loops):
+        for _ in range(self.loops):
             klass = Cheetah.Template.Template.compile(template)
             assert klass
     test_BasicDynamic = perftest(1200)(test_BasicDynamic)
@@ -89,9 +90,9 @@ class PerformanceTest(unittest.TestCase):
     save = False
 
     def runTest(self):
-        self.prof = hotshot.Profile('%s.prof' % self.__class__.__name__)
+        self.prof = hotshot.Profile(f'{self.__class__.__name__}.prof')
         self.prof.start()
-        for i in range(self.iterations):
+        for _ in range(self.iterations):
             if hasattr(self, 'performanceSample'):
                 self.display = True
                 self.performanceSample()
@@ -100,13 +101,13 @@ class PerformanceTest(unittest.TestCase):
         if self.display:
             print('>>> %s (%d iterations) ' % (self.__class__.__name__,
                     self.iterations))
-            stats = hotshot.stats.load('%s.prof' % self.__class__.__name__)
+            stats = hotshot.stats.load(f'{self.__class__.__name__}.prof')
             #stats.strip_dirs()
             stats.sort_stats('time', 'calls')
             stats.print_stats(50)
 
         if not self.save:
-            os.unlink('%s.prof' % self.__class__.__name__)
+            os.unlink(f'{self.__class__.__name__}.prof')
 
 class DynamicMethodCompilationTest(PerformanceTest):
     def performanceSample(self):
@@ -239,5 +240,5 @@ class LongCompileAndRun(LongCompileTest):
 if __name__ == '__main__':
     if '--debug' in sys.argv:
         DEBUG = True
-        sys.argv = [arg for arg in sys.argv if not arg == '--debug']
+        sys.argv = [arg for arg in sys.argv if arg != '--debug']
     unittest.main()

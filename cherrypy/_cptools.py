@@ -70,30 +70,19 @@ class Tool(object):
             if hasattr(self.callable, "__call__"):
                 for arg in _getargs(self.callable.__call__):
                     setattr(self, arg, None)
-        # IronPython 1.0 raises NotImplementedError because
-        # inspect.getargspec tries to access Python bytecode
-        # in co_code attribute.
-        except NotImplementedError:
-            pass
-        # IronPython 1B1 may raise IndexError in some cases,
-        # but if we trap it here it doesn't prevent CP from working.
-        except IndexError:
+        except (NotImplementedError, IndexError):
             pass
     
     def _merged_args(self, d=None):
         """Return a dict of configuration entries for this Tool."""
-        if d:
-            conf = d.copy()
-        else:
-            conf = {}
-        
+        conf = d.copy() if d else {}
         tm = cherrypy.serving.request.toolmaps[self.namespace]
         if self._name in tm:
             conf.update(tm[self._name])
-        
+
         if "on" in conf:
             del conf["on"]
-        
+
         return conf
     
     def __call__(self, *args, **kwargs):
@@ -113,11 +102,12 @@ class Tool(object):
         def tool_decorator(f):
             if not hasattr(f, "_cp_config"):
                 f._cp_config = {}
-            subspace = self.namespace + "." + self._name + "."
-            f._cp_config[subspace + "on"] = True
+            subspace = f"{self.namespace}.{self._name}."
+            f._cp_config[f"{subspace}on"] = True
             for k, v in kwargs.items():
                 f._cp_config[subspace + k] = v
             return f
+
         return tool_decorator
     
     def _setup(self):
@@ -268,15 +258,15 @@ class SessionTool(Tool):
         method when the tool is "turned on" in config.
         """
         hooks = cherrypy.serving.request.hooks
-        
+
         conf = self._merged_args()
-        
+
         p = conf.pop("priority", None)
         if p is None:
             p = getattr(self.callable, "priority", self._priority)
-        
+
         hooks.attach(self._point, self.callable, priority=p, **conf)
-        
+
         locking = conf.pop('locking', 'implicit')
         if locking == 'implicit':
             hooks.attach('before_handler', self._lock_session)
@@ -284,10 +274,6 @@ class SessionTool(Tool):
             # Lock before the request body (but after _sessions.init runs!)
             hooks.attach('before_request_body', self._lock_session,
                          priority=60)
-        else:
-            # Don't lock
-            pass
-        
         hooks.attach('before_finalize', _sessions.save)
         hooks.attach('on_end_request', _sessions.close)
         
@@ -344,21 +330,21 @@ class XMLRPCController(object):
     
     def default(self, *vpath, **params):
         rpcparams, rpcmethod = _xmlrpc.process_body()
-        
+
         subhandler = self
         for attr in str(rpcmethod).split('.'):
             subhandler = getattr(subhandler, attr, None)
-         
+
         if subhandler and getattr(subhandler, "exposed", False):
             body = subhandler(*(vpath + rpcparams), **params)
-        
+
         else:
             # http://www.cherrypy.org/ticket/533
             # if a method is not found, an xmlrpclib.Fault should be returned
             # raising an exception here will do that; see
             # cherrypy.lib.xmlrpc.on_error
-            raise Exception('method "%s" is not supported' % attr)
-        
+            raise Exception(f'method "{attr}" is not supported')
+
         conf = cherrypy.serving.request.toolmaps['tools'].get("xmlrpc", {})
         _xmlrpc.respond(body,
                         conf.get('encoding', 'utf-8'),
@@ -382,11 +368,10 @@ class CachingTool(Tool):
         request = cherrypy.serving.request
         if _caching.get(**kwargs):
             request.handler = None
-        else:
-            if request.cacheable:
-                # Note the devious technique here of adding hooks on the fly
-                request.hooks.attach('before_finalize', _caching.tee_output,
-                                     priority=90)
+        elif request.cacheable:
+            # Note the devious technique here of adding hooks on the fly
+            request.hooks.attach('before_finalize', _caching.tee_output,
+                                 priority=90)
     _wrapper.priority = 20
     
     def _setup(self):
@@ -428,8 +413,7 @@ class Toolbox(object):
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Run tool._setup() for each tool in our toolmap."""
-        map = cherrypy.serving.request.toolmaps.get(self.namespace)
-        if map:
+        if map := cherrypy.serving.request.toolmaps.get(self.namespace):
             for name, settings in map.items():
                 if settings.get("on", False):
                     tool = getattr(self, name)

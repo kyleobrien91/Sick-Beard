@@ -33,12 +33,6 @@ class DummyClass(object):
         
         x = 'A string'
         try:
-            for i in [1, 2, 3, 4]:
-                if x == 2:	
-                    pass
-                
-                if x == 'xx':
-                    pass
             return x
         except:
             raise
@@ -77,7 +71,7 @@ testNamespace = {
     'emptyString': '',
     'funcThatRaises': funcThatRaises,
     }
-    
+
 autoCallResults = {'aFunc': 'Scooby',
                    'aMeth': 'doo',
                    }
@@ -94,9 +88,9 @@ results.update({'anObj.meth1': 'doo',
                 'anObj.meth3': 'A string',
                 })
 
-for k in testNamespace.keys():
+for k in testNamespace:
     # put them in the globals for the valueFromFrame tests
-    exec('%s = testNamespace[k]'%k)
+    exec(f'{k} = testNamespace[k]')
 
 ##################################################
 ## TEST BASE CLASSES
@@ -139,7 +133,7 @@ class VFN(NameMapperTest):
 
     def test2(self):
         """string in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aStr')
             
     def test3(self):
@@ -148,7 +142,7 @@ class VFN(NameMapperTest):
 
     def test4(self):
         """int in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('anInt')
 
     def test5(self):
@@ -157,7 +151,7 @@ class VFN(NameMapperTest):
 
     def test6(self):
         """float in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aFloat')
           
     def test7(self):
@@ -166,7 +160,7 @@ class VFN(NameMapperTest):
 
     def test8(self):
         """class in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aClass')
             
     def test9(self):
@@ -175,7 +169,7 @@ class VFN(NameMapperTest):
 
     def test10(self):
         """aFunc in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aFunc')
 
     def test11(self):
@@ -184,7 +178,7 @@ class VFN(NameMapperTest):
 
     def test12(self):
         """aMeth in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aMeth')
 
     def test13(self):
@@ -193,7 +187,7 @@ class VFN(NameMapperTest):
 
     def test14(self):
         """aMeth in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aMeth')
 
     def test15(self):
@@ -202,7 +196,7 @@ class VFN(NameMapperTest):
 
     def test16(self):
         """anObj in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('anObj')
 
     def test17(self):
@@ -211,7 +205,7 @@ class VFN(NameMapperTest):
 
     def test18(self):
         """aDict in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict')
 
     def test17(self):
@@ -220,7 +214,7 @@ class VFN(NameMapperTest):
 
     def test18(self):
         """aDict in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict')
 
     def test19(self):
@@ -229,7 +223,7 @@ class VFN(NameMapperTest):
 
     def test20(self):
         """aClass.classVar1 in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aClass.classVar1')
 
 
@@ -239,7 +233,7 @@ class VFN(NameMapperTest):
 
     def test24(self):
         """anObj.instanceVar1 in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('anObj.instanceVar1')
 
     ## tests 22, 25, and 26 removed when the underscored lookup was removed
@@ -250,7 +244,7 @@ class VFN(NameMapperTest):
 
     def test28(self):
         """anObj.meth1 in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('anObj.meth1')
 
     def test29(self):
@@ -259,7 +253,7 @@ class VFN(NameMapperTest):
 
     def test30(self):
         """aDict.one in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict.one')
 
     def test31(self):
@@ -268,7 +262,7 @@ class VFN(NameMapperTest):
 
     def test32(self):
         """aDict.nestedDict in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict.nestedDict')
             
     def test33(self):
@@ -277,7 +271,7 @@ class VFN(NameMapperTest):
 
     def test34(self):
         """aDict.nestedDict.one in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict.nestedDict.one')
             
     def test35(self):
@@ -286,7 +280,7 @@ class VFN(NameMapperTest):
 
     def test36(self):
         """aDict.nestedFunc in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict.nestedFunc')
 
     def test37(self):
@@ -295,7 +289,7 @@ class VFN(NameMapperTest):
 
     def test38(self):
         """aDict.nestedFunc in dict lookup in a loop - without autocalling"""
-        for i in range(10):
+        for _ in range(10):
             assert self.get('aDict.nestedFunc', False) == dummyFunc
 
     def test39(self):
@@ -304,7 +298,7 @@ class VFN(NameMapperTest):
 
     def test40(self):
         """aMeth in dict lookup in a loop - without autocalling"""
-        for i in range(10):
+        for _ in range(10):
             assert self.get('aMeth', False) == self.namespace()['aMeth']
 
     def test41(self):
@@ -313,7 +307,7 @@ class VFN(NameMapperTest):
 
     def test42(self):
         """aMeth in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('anObj.meth3')
 
     def test43(self):
@@ -352,7 +346,7 @@ class VFN(NameMapperTest):
 
     def test48(self):
         """None in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('none')
             
     def test49(self):
@@ -361,7 +355,7 @@ class VFN(NameMapperTest):
 
     def test50(self):
         """EmptyString in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('emptyString')
 
     def test51(self):
@@ -401,7 +395,7 @@ class VFN(NameMapperTest):
 
     def test56(self):
         """aDict.nestedDict.aClass in dict lookup in a loop"""
-        for i in range(10):
+        for _ in range(10):
             self.check('aDict.nestedDict.aClass')
 
     def test57(self):
@@ -410,7 +404,7 @@ class VFN(NameMapperTest):
 
     def test58(self):
         """aDict.nestedDict.aClass in dict lookup in a loop - without autocalling"""
-        for i in range(10):
+        for _ in range(10):
             assert self.get('aDict.nestedDict.aClass', False) == DummyClass
 
     def test59(self):
@@ -421,7 +415,7 @@ class VFN(NameMapperTest):
     def test60(self):
         """Other exception from func test in a loop -- but without autocalling shouldn't raise"""
 
-        for i in range(10):
+        for _ in range(10):
             self.get('aDict.nestedDict.funcThatRaises', False)    
 
     def test61(self):
@@ -449,10 +443,10 @@ class VFS(VFN):
             return self.searchListGenerator()
 
     def searchListGenerator(self):
+
         class Test:
             pass
-        for i in [Test(), {'dummy':1234}, self.namespace(), {'dummy':1234}]:
-            yield i
+        yield from [Test(), {'dummy':1234}, self.namespace(), {'dummy':1234}]
   
     def get(self, name, autocall=True):
         return self.VFS(self.searchList(), name, autocall)

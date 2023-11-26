@@ -56,7 +56,7 @@ def readVorbisComment(metadata, comment):
                 key = VORBIS_KEY_TO_ATTR[key]
                 setattr(metadata, key, value)
             elif value:
-                metadata.warning("Skip Vorbis comment %s: %s" % (key, value))
+                metadata.warning(f"Skip Vorbis comment {key}: {value}")
 
 class OggMetadata(MultipleMetadata):
     def extract(self, ogg):
@@ -83,7 +83,7 @@ class OggMetadata(MultipleMetadata):
                     granule_quotient = meta.get('frame_rate')
             if "comment" in page:
                 readVorbisComment(self, page["comment"])
-            if 3 <= index:
+            if index >= 3:
                 # Only process pages 0..3
                 break
 
@@ -107,7 +107,7 @@ class OggMetadata(MultipleMetadata):
     def theoraHeader(self, header, meta):
         meta.compression = "Theora"
         meta.format_version = "Theora version %u.%u (revision %u)" % (\
-            header["version_major"].value,
+                header["version_major"].value,
             header["version_minor"].value,
             header["version_revision"].value)
         meta.width = header["frame_width"].value
@@ -117,13 +117,13 @@ class OggMetadata(MultipleMetadata):
         if header["aspect_ratio_den"].value:
             meta.aspect_ratio = float(header["aspect_ratio_num"].value) / header["aspect_ratio_den"].value
         meta.pixel_format = header["pixel_format"].display
-        meta.comment = "Quality: %s" % header["quality"].value
+        meta.comment = f'Quality: {header["quality"].value}'
 
     def vorbisHeader(self, header, meta):
         meta.compression = u"Vorbis"
         meta.sample_rate = header["audio_sample_rate"].value
         meta.nb_channel = header["audio_channels"].value
-        meta.format_version = u"Vorbis version %s" % header["vorbis_version"].value
+        meta.format_version = f'Vorbis version {header["vorbis_version"].value}'
         meta.bit_rate = header["bitrate_nominal"].value
 
 class AuMetadata(RootMetadata):
@@ -152,7 +152,7 @@ class RealAudioMetadata(RootMetadata):
         if "metadata" in real:
             self.useMetadata(real["metadata"])
         self.useRoot(real)
-        self.format_version = "Real audio version %s" % version
+        self.format_version = f"Real audio version {version}"
         if version == 3:
             size = getValue(real, "data_size")
         elif "filesize" in real and "headersize" in real:
@@ -182,8 +182,7 @@ class RealAudioMetadata(RootMetadata):
         else:
             self.sample_rate = 8000
             self.nb_channel = 1
-        fourcc = getValue(real, "FourCC")
-        if fourcc:
+        if fourcc := getValue(real, "FourCC"):
             self.compression = fourcc
             try:
                 self.bit_rate = self.FOURCC_TO_BITRATE[fourcc]
@@ -213,7 +212,7 @@ class RealMediaMetadata(MultipleMetadata):
         if key in self.KEY_TO_ATTR:
             setattr(self, self.KEY_TO_ATTR[key], value)
         elif value:
-            self.warning("Skip %s: %s" % (prop["name"].value, value))
+            self.warning(f'Skip {prop["name"].value}: {value}')
 
     @fault_tolerant
     def useFileProp(self, prop):
@@ -230,7 +229,7 @@ class RealMediaMetadata(MultipleMetadata):
     @fault_tolerant
     def useStreamProp(self, stream, index):
         meta = Metadata(self)
-        meta.comment = "Start: %s" % stream["stream_start"].value
+        meta.comment = f'Start: {stream["stream_start"].value}'
         if getValue(stream, "mime_type") == "logical-fileinfo":
             for prop in stream.array("file_info/prop"):
                 self.useFileInfoProp(prop)
@@ -279,7 +278,7 @@ class MpegAudioMetadata(RootMetadata):
         if "text" not in content:
             return
         if "title" in content and content["title"].value:
-            value = "%s: %s" % (content["title"].value, content["text"].value)
+            value = f'{content["title"].value}: {content["text"].value}'
         else:
             value = content["text"].value
 
@@ -289,7 +288,7 @@ class MpegAudioMetadata(RootMetadata):
             if tag:
                 if isinstance(tag, str):
                     tag = makePrintable(tag, "ISO-8859-1", to_unicode=True)
-                self.warning("Skip ID3v2 tag %s: %s" % (tag, value))
+                self.warning(f"Skip ID3v2 tag {tag}: {value}")
             return
         key = self.TAG_TO_KEY[tag]
         setattr(self, key, value)
@@ -303,8 +302,7 @@ class MpegAudioMetadata(RootMetadata):
         if "/frames/frame[0]" in mp3:
             frame = mp3["/frames/frame[0]"]
             self.nb_channel = (frame.getNbChannel(), frame["channel_mode"].display)
-            self.format_version = u"MPEG version %s layer %s" % \
-                (frame["version"].display, frame["layer"].display)
+            self.format_version = f'MPEG version {frame["version"].display} layer {frame["layer"].display}'
             self.sample_rate = frame.getSampleRate()
             self.bits_per_sample = 16
             if mp3["frames"].looksConstantBitRate():
@@ -372,8 +370,7 @@ class AiffMetadata(RootMetadata):
         self.bits_per_sample = info["sample_size"].value
         self.sample_rate = getValue(info, "sample_rate")
         if self.has("sample_rate"):
-            rate = self.get("sample_rate")
-            if rate:
+            if rate := self.get("sample_rate"):
                 sec = float(info["nb_sample"].value) / rate
                 self.duration = timedelta(seconds=sec)
         if "codec" in info:
@@ -391,8 +388,7 @@ class FlacMetadata(RootMetadata):
         self.nb_channel = info["nb_channel"].value + 1
         self.bits_per_sample = info["bits_per_sample"].value + 1
         self.sample_rate = info["sample_hertz"].value
-        sec = info["total_samples"].value
-        if sec:
+        if sec := info["total_samples"].value:
             sec = float(sec) / info["sample_hertz"].value
             self.duration = timedelta(seconds=sec)
 

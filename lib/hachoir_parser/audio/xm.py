@@ -101,7 +101,7 @@ def createInstrumentContentSize(s, addr):
 
     sample_size = 0
     if samples:
-        for index in xrange(samples):
+        for _ in xrange(samples):
             # Read the sample size from the header
             sample_size += s.stream.readBits(addr, 32, LITTLE_ENDIAN)
             # Seek to next sample header
@@ -117,8 +117,7 @@ class Instrument(FieldSet):
 
     # Seems to fix things...
     def fixInstrumentHeader(self):
-        size = self["size"].value - self.current_size//8
-        if size:
+        if size := self["size"].value - self.current_size // 8:
             yield RawBytes(self, "unknown_data", size)
 
     def createFields(self):
@@ -134,12 +133,10 @@ class Instrument(FieldSet):
         if num:
             yield InstrumentSecondHeader(self, "second_header")
 
-            for field in self.fixInstrumentHeader():
-                yield field
-
+            yield from self.fixInstrumentHeader()
             # This part probably wrong
             sample_size = [ ]
-            for index in xrange(num):
+            for _ in xrange(num):
                 sample = SampleHeader(self, "sample_header[]")
                 yield sample
                 sample_size.append(sample["length"].value)
@@ -148,8 +145,7 @@ class Instrument(FieldSet):
                 if size:
                     yield RawBytes(self, "sample_data[]", size, "Deltas")
         else:
-            for field in self.fixInstrumentHeader():
-                yield field
+            yield from self.fixInstrumentHeader()
 
     def createDescription(self):
         return "Instrument '%s': %i samples, header %i bytes" % \
@@ -163,10 +159,7 @@ VOLUME_NAME = (
 
 def parseVolume(val):
     val = val.value
-    if 0x10<=val<=0x50:
-        return "Volume %i" % val-16
-    else:
-        return VOLUME_NAME[val/16 - 6]
+    return "Volume %i" % val-16 if 0x10<=val<=0x50 else VOLUME_NAME[val/16 - 6]
 
 class RealBit(RawBits):
     static_size = 1
@@ -270,21 +263,22 @@ class Note(FieldSet):
             if info["has_volume"].value:
                 desc.append(self["has_volume"].display)
             if info["has_type"].value:
-                desc.append("effect %s" % self["effect_type"].value)
+                desc.append(f'effect {self["effect_type"].value}')
             if info["has_parameter"].value:
                 desc.append("parameter %i" % self["effect_parameter"].value)
         else:
-            desc = (self["note"].display, "instrument %i" % self["instrument"].value,
-                self["has_volume"].display, "effect %s" % self["effect_type"].value,
-                "parameter %i" % self["effect_parameter"].value)
-        if desc:
-            return "Note %s" % ", ".join(desc)
-        else:
-            return "Note"
+            desc = (
+                self["note"].display,
+                "instrument %i" % self["instrument"].value,
+                self["has_volume"].display,
+                f'effect {self["effect_type"].value}',
+                "parameter %i" % self["effect_parameter"].value,
+            )
+        return f'Note {", ".join(desc)}' if desc else "Note"
 
 class Row(FieldSet):
     def createFields(self):
-        for index in xrange(self["/header/channels"].value):
+        for _ in xrange(self["/header/channels"].value):
             yield Note(self, "note[]")
 
 def createPatternContentSize(s, addr):
@@ -303,7 +297,7 @@ class Pattern(FieldSet):
         yield UInt16(self, "data_size", r"Packed patterndata size")
         rows = self["rows"].value
         self.info("Pattern: %i rows" % rows)
-        for index in xrange(rows):
+        for _ in xrange(rows):
             yield Row(self, "row[]")
 
     def createDescription(self):
@@ -334,8 +328,7 @@ class Header(FieldSet):
         yield GenericVector(self, "pattern_order", 256, UInt8, "order")
 
     def createDescription(self):
-        return "'%s' by '%s'" % (
-            self["title"].value, self["tracker_name"].value)
+        return f"""'{self["title"].value}' by '{self["tracker_name"].value}'"""
 
 class XMModule(Parser):
     PARSER_TAGS = {
@@ -354,32 +347,31 @@ class XMModule(Parser):
     def validate(self):
         header = self.stream.readBytes(0, 17)
         if header != Header.MAGIC:
-            return "Invalid signature '%s'" % header
+            return f"Invalid signature '{header}'"
         if self["/header/header_size"].value != 276:
             return "Unknown header size (%u)" % self["/header/header_size"].value
         return True
 
     def createFields(self):
         yield Header(self, "header")
-        for index in xrange(self["/header/patterns"].value):
+        for _ in xrange(self["/header/patterns"].value):
             yield Pattern(self, "pattern[]")
-        for index in xrange(self["/header/instruments"].value):
+        for _ in xrange(self["/header/instruments"].value):
             yield Instrument(self, "instrument[]")
 
         # Metadata added by ModPlug - can be discarded
-        for field in ParseModplugMetadata(self):
-            yield field
+        yield from ParseModplugMetadata(self)
 
     def createContentSize(self):
         # Header size
         size = Header.static_size
 
         # Add patterns size
-        for index in xrange(self["/header/patterns"].value):
+        for _ in xrange(self["/header/patterns"].value):
             size += createPatternContentSize(self, size)
 
         # Add instruments size
-        for index in xrange(self["/header/instruments"].value):
+        for _ in xrange(self["/header/instruments"].value):
             size += createInstrumentContentSize(self, size)
 
         # Not reporting Modplug metadata

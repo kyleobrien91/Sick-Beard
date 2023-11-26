@@ -139,48 +139,42 @@ class GenericString(Bytes):
             assert self._format == "fixed"
             # Arbitrary limits, just to catch some bugs...
             if not (1 <= nbytes <= 0xffff):
-                raise FieldError("Invalid string size for %s: %s" %
-                    (self.path, nbytes))
+                raise FieldError(f"Invalid string size for {self.path}: {nbytes}")
             self._content_size = nbytes   # content length in bytes
             self._size = nbytes * 8
             self._content_offset = 0
+        elif self._format in self.SUFFIX_FORMAT:
+            self._content_offset = 0
+            suffix = self.suffix_str
+            # Find the suffix
+            length = self._parent.stream.searchBytesLength(
+                suffix, False, self.absolute_address)
+            if length is None:
+                raise FieldError(
+                    f"Unable to find end of string {self.path} (format {self._format})!"
+                )
+            if len(suffix) > 1:
+                # Fix length for little endian bug with UTF-xx charset:
+                #   u"abc" -> "a\0b\0c\0\0\0" (UTF-16-LE)
+                #   search returns length=5, whereas real lenght is 6
+                length = alignValue(length, len(suffix))
+
+            # Compute sizes
+            self._content_size = length # in bytes
+            self._size = (length + len(suffix)) * 8
+
         else:
-            # Format with a suffix: Find the end of the string
-            if self._format in self.SUFFIX_FORMAT:
-                self._content_offset = 0
+            assert self._format in self.PASCAL_FORMATS
 
-                # Choose the suffix
-                suffix = self.suffix_str
+            # Get the prefix size
+            prefix_size = self.PASCAL_FORMATS[self._format]
+            self._content_offset = prefix_size
 
-                # Find the suffix
-                length = self._parent.stream.searchBytesLength(
-                    suffix, False, self.absolute_address)
-                if length is None:
-                    raise FieldError("Unable to find end of string %s (format %s)!"
-                        % (self.path, self._format))
-                if 1 < len(suffix):
-                    # Fix length for little endian bug with UTF-xx charset:
-                    #   u"abc" -> "a\0b\0c\0\0\0" (UTF-16-LE)
-                    #   search returns length=5, whereas real lenght is 6
-                    length = alignValue(length, len(suffix))
-
-                # Compute sizes
-                self._content_size = length # in bytes
-                self._size = (length + len(suffix)) * 8
-
-            # Format with a prefix: Read prefixed length in bytes
-            else:
-                assert self._format in self.PASCAL_FORMATS
-
-                # Get the prefix size
-                prefix_size = self.PASCAL_FORMATS[self._format]
-                self._content_offset = prefix_size
-
-                # Read the prefix and compute sizes
-                value = self._parent.stream.readBits(
-                    self.absolute_address, prefix_size*8, self._parent.endian)
-                self._content_size = value   # in bytes
-                self._size = (prefix_size + value) * 8
+            # Read the prefix and compute sizes
+            value = self._parent.stream.readBits(
+                self.absolute_address, prefix_size*8, self._parent.endian)
+            self._content_size = value   # in bytes
+            self._size = (prefix_size + value) * 8
 
         # For UTF-16 and UTF-32, choose the right charset using BOM
         if self._charset in self.UTF_CHARSET:
@@ -194,8 +188,7 @@ class GenericString(Bytes):
                 # Choose right charset using the BOM
                 bom_endian = self.UTF_BOM[bomsize]
                 if bom not in bom_endian:
-                    raise FieldError("String %s has invalid BOM (%s)!"
-                        % (self.path, repr(bom)))
+                    raise FieldError(f"String {self.path} has invalid BOM ({repr(bom)})!")
                 self._charset = bom_endian[bom]
                 self._content_size -= nbytes
                 self._content_offset += nbytes
@@ -282,7 +275,7 @@ class GenericString(Bytes):
         # Truncate
         if self._truncate:
             pos = text.find(self._truncate)
-            if 0 <= pos:
+            if pos >= 0:
                 text = text[:pos]
 
         # Strip string if needed
@@ -305,14 +298,11 @@ class GenericString(Bytes):
             value = self.value
         if config.max_string_length < len(value):
             # Truncate string if needed
-            value = "%s(...)" % value[:config.max_string_length]
+            value = f"{value[:config.max_string_length]}(...)"
         if not self._charset or not human:
             return makePrintable(value, "ASCII", quote='"', to_unicode=True)
         else:
-            if value:
-                return '"%s"' % value.replace('"', '\\"')
-            else:
-                return _("(empty)")
+            return '"%s"' % value.replace('"', '\\"') if value else _("(empty)")
 
     def createRawDisplay(self):
         return GenericString.createDisplay(self, human=False)
@@ -348,7 +338,7 @@ class GenericString(Bytes):
                 info += ",strip=%s" % makePrintable(self._strip, "ASCII", quote="'")
             else:
                 info += ",strip=True"
-        return "%s<%s>" % (Bytes.getFieldType(self), info)
+        return f"{Bytes.getFieldType(self)}<{info}>"
 
 def stringFactory(name, format, doc):
     class NewString(GenericString):

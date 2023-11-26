@@ -165,12 +165,7 @@ class _TrappedResponse(object):
             if not _cherrypy.request.show_tracebacks:
                 tb = ""
             s, h, b = _cperror.bare_error(tb)
-            if self.started_response:
-                # Empty our iterable (so future calls raise StopIteration)
-                self.iter_response = iter([])
-            else:
-                self.iter_response = iter(b)
-            
+            self.iter_response = iter([]) if self.started_response else iter(b)
             try:
                 self.start_response(s, h, _sys.exc_info())
             except:
@@ -181,11 +176,8 @@ class _TrappedResponse(object):
                 # But we still log and call close() to clean up ourselves.
                 _cherrypy.log(traceback=True, severity=40)
                 raise
-            
-            if self.started_response:
-                return "".join(b)
-            else:
-                return b
+
+            return "".join(b) if self.started_response else b
 
 
 #                           WSGI-to-CP Adapter                           #

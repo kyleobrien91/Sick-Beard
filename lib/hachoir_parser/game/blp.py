@@ -32,8 +32,14 @@ class Generic2DArray(FieldSet):
         self.item_name = item_name
 
     def createFields(self):
-        for i in xrange(self.height):
-            yield GenericVector(self, self.row_name+"[]", self.width, self.item_class, self.item_name)
+        for _ in xrange(self.height):
+            yield GenericVector(
+                self,
+                f"{self.row_name}[]",
+                self.width,
+                self.item_class,
+                self.item_name,
+            )
 
 class BLP1File(Parser):
     MAGIC = "BLP1"
@@ -49,9 +55,7 @@ class BLP1File(Parser):
     endian = LITTLE_ENDIAN
 
     def validate(self):
-        if self.stream.readBytes(0, 4) != "BLP1":
-            return "Invalid magic"
-        return True
+        return "Invalid magic" if self.stream.readBytes(0, 4) != "BLP1" else True
 
     def createFields(self):
         yield String(self, "magic", 4, "Signature (BLP1)")
@@ -66,9 +70,9 @@ class BLP1File(Parser):
             4:"Uncompressed Index List + Alpha List",
             5:"Uncompressed Index List"})
         yield UInt32(self, "subtype")
-        for i in xrange(16):
+        for _ in xrange(16):
             yield UInt32(self, "mipmap_offset[]")
-        for i in xrange(16):
+        for _ in xrange(16):
             yield UInt32(self, "mipmap_size[]")
 
         compression = self["compression"].value
@@ -87,8 +91,7 @@ class BLP1File(Parser):
         for i in xrange(16):
             if not offsets[i].value or not sizes[i].value:
                 continue
-            padding = self.seekByte(offsets[i].value)
-            if padding:
+            if padding := self.seekByte(offsets[i].value):
                 yield padding
             if compression == 0:
                 yield RawBytes(self, "mipmap[%i]" % i, sizes[i].value, "JPEG data, append to header to recover complete image")
@@ -111,14 +114,13 @@ def interp_avg(data_low, data_high, n):
     else: # iterable
         pairs = zip(data_low, data_high)
         pair_iters = [interp_avg(x, y, n) for x, y in pairs]
-        for i in range(1, n):
+        for _ in range(1, n):
             yield [iter.next() for iter in pair_iters]
 
 def color_name(data, bits):
     """Color names in #RRGGBB format, given the number of bits for each component."""
     ret = ["#"]
-    for i in range(3):
-        ret.append("%02X" % (data[i] << (8-bits[i])))
+    ret.extend("%02X" % (data[i] << (8-bits[i])) for i in range(3))
     return ''.join(ret)
 
 class DXT1(FieldSet):
@@ -147,7 +149,7 @@ class DXT1(FieldSet):
             if color is None:
                 pixel._description = "Transparent"
             else:
-                pixel._description = "RGB color: %s" % color_name(color, [5, 6, 5])
+                pixel._description = f"RGB color: {color_name(color, [5, 6, 5])}"
             yield pixel
 
 class DXT3Alpha(FieldSet):
@@ -165,9 +167,8 @@ class DXT3(FieldSet):
 class DXT5Alpha(FieldSet):
     static_size = 64
     def createFields(self):
-        values = []
         yield UInt8(self, "alpha_val[0]", "First alpha value")
-        values.append(self["alpha_val[0]"].value)
+        values = [self["alpha_val[0]"].value]
         yield UInt8(self, "alpha_val[1]", "Second alpha value")
         values.append(self["alpha_val[1]"].value)
         if values[0] > values[1]:
@@ -201,9 +202,7 @@ class BLP2File(Parser):
     endian = LITTLE_ENDIAN
 
     def validate(self):
-        if self.stream.readBytes(0, 4) != "BLP2":
-            return "Invalid magic"
-        return True
+        return "Invalid magic" if self.stream.readBytes(0, 4) != "BLP2" else True
 
     def createFields(self):
         yield String(self, "magic", 4, "Signature (BLP2)")
@@ -223,9 +222,9 @@ class BLP2File(Parser):
             1:"Mip levels present; number of levels determined by image size"})
         yield UInt32(self, "width", "Base image width")
         yield UInt32(self, "height", "Base image height")
-        for i in xrange(16):
+        for _ in xrange(16):
             yield UInt32(self, "mipmap_offset[]")
-        for i in xrange(16):
+        for _ in xrange(16):
             yield UInt32(self, "mipmap_size[]")
         yield PaletteRGBA(self, "palette", 256)
 
@@ -245,8 +244,7 @@ class BLP2File(Parser):
         for i in xrange(16):
             if not offsets[i].value or not sizes[i].value:
                 continue
-            padding = self.seekByte(offsets[i].value)
-            if padding:
+            if padding := self.seekByte(offsets[i].value):
                 yield padding
             if compression == 0:
                 yield RawBytes(self, "mipmap[%i]" % i, sizes[i].value, "JPEG data, append to header to recover complete image")

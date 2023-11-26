@@ -20,9 +20,7 @@ class RecursiveNull(object):
     def __nonzero__(self):
         return 0
     def __eq__(self, x):
-        if x:
-            return False
-        return True
+        return not x
     def __ne__(self, x):
         return x and True or False
 

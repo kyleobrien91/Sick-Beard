@@ -130,8 +130,7 @@ class Ducky(FieldSet):
         if self["type"].value == 0:
             return
         yield UInt16(self, "size")
-        size = self["size"].value
-        if size:
+        if size := self["size"].value:
             yield RawBytes(self, "data", size)
 
 class APP12(FieldSet):
@@ -152,7 +151,7 @@ class StartOfFrame(FieldSet):
         yield UInt16(self, "width")
         yield UInt8(self, "nr_components")
 
-        for index in range(self["nr_components"].value):
+        for _ in range(self["nr_components"].value):
             yield UInt8(self, "component_id[]")
             yield UInt8(self, "high[]")
             yield UInt8(self, "low[]")
@@ -182,7 +181,7 @@ class StartOfScan(FieldSet):
     def createFields(self):
         yield UInt8(self, "nr_components")
 
-        for index in range(self["nr_components"].value):
+        for _ in range(self["nr_components"].value):
             comp_id = UInt8(self, "component_id[]")
             yield comp_id
             if not(1 <= comp_id.value <= self["nr_components"].value):
@@ -200,11 +199,8 @@ class QuantizationTable(FieldSet):
         yield Bits(self, "is_16bit", 4)
         yield Bits(self, "index", 4)
         if self["index"].value >= 4:
-            raise ParserError("Invalid quantification index (%s)" % self["index"].value)
-        if self["is_16bit"].value:
-            coeff_type = UInt16
-        else:
-            coeff_type = UInt8
+            raise ParserError(f'Invalid quantification index ({self["index"].value})')
+        coeff_type = UInt16 if self["is_16bit"].value else UInt8
         for index in xrange(64):
             natural = JPEG_NATURAL_ORDER[index]
             yield coeff_type(self, "coeff[%u]" % natural)
@@ -284,14 +280,14 @@ class JpegChunk(FieldSet):
             return
         yield UInt16(self, "size", "Size")
         size = (self["size"].value - 2)
-        if 0 < size:
+        if size > 0:
             if self._parser:
                 yield self._parser(self, "content", "Chunk content", size=size*8)
             else:
                 yield RawBytes(self, "data", size, "Data")
 
     def createDescription(self):
-        return "Chunk: %s" % self["type"].display
+        return f'Chunk: {self["type"].display}'
 
 class JpegFile(Parser):
     endian = BIG_ENDIAN
@@ -338,10 +334,11 @@ class JpegFile(Parser):
             raise NotImplementedError
 
         has_end = False
-        size = (self._size - self.current_size) // 8
-        if size:
-            if 2 < size \
-            and self.stream.readBytes(self._size - 16, 2) == "\xff\xd9":
+        if size := (self._size - self.current_size) // 8:
+            if (
+                size > 2
+                and self.stream.readBytes(self._size - 16, 2) == "\xff\xd9"
+            ):
                 has_end = True
                 size -= 2
             yield RawBytes(self, "data", size, "JPEG data")
@@ -362,7 +359,5 @@ class JpegFile(Parser):
             return None
         start = self["data"].absolute_address
         end = self.stream.searchBytes("\xff\xd9", start, MAX_FILESIZE*8)
-        if end is not None:
-            return end + 16
-        return None
+        return end + 16 if end is not None else None
 

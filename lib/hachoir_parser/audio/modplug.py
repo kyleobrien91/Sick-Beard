@@ -34,20 +34,20 @@ class Command(FieldSet):
         start = self.absolute_address
         size = self.stream.searchBytesLength("\0", False, start)
         if size > 0:
-            self.info("Command: %s" % self.stream.readBytes(start, size))
+            self.info(f"Command: {self.stream.readBytes(start, size)}")
             yield String(self, "command", size, strip='\0')
         yield RawBytes(self, "parameter", (self._size//8)-size)
 
 class MidiSFXExt(FieldSet):
     static_size = 16*32*8
     def createFields(self):
-        for index in xrange(16):
+        for _ in xrange(16):
             yield Command(self, "command[]")
 
 class MidiZXXExt(FieldSet):
     static_size = 128*32*8
     def createFields(self):
-        for index in xrange(128):
+        for _ in xrange(128):
             yield Command(self, "command[]")
 
 def parseMidiConfig(parser):
@@ -83,8 +83,7 @@ class ExtraData(FieldSet):
 
     def createFields(self):
         yield UInt32(self, "size")
-        size = self["size"].value
-        if size:
+        if size := self["size"].value:
             yield RawBytes(self, "data", size)
 
 class XPlugData(FieldSet):
@@ -212,11 +211,10 @@ class MPField(FieldSet):
                 yield RawBytes(self, "data", size)
         elif cls in (String, RawBytes):
             yield cls(self, "value", count)
+        elif count > 1:
+            yield GenericVector(self, "values", count, cls, "item")
         else:
-            if count > 1:
-                yield GenericVector(self, "values", count, cls, "item")
-            else:
-                yield cls(self, "value")
+            yield cls(self, "value")
 
     def createDescription(self):
         return "Element '%s', size %i" % \
@@ -225,8 +223,8 @@ class MPField(FieldSet):
 def parseFields(parser):
     # Determine field names
     ext = EXTENSIONS[parser["block_type"].value]
-    if ext == None:
-        raise ParserError("Unknown parent '%s'" % parser["block_type"].value)
+    if ext is None:
+        raise ParserError(f"""Unknown parent '{parser["block_type"].value}'""")
 
     # Parse fields
     addr = parser.absolute_address + parser.current_size
@@ -236,8 +234,9 @@ def parseFields(parser):
         addr += field._size
 
     # Abort on unknown codes
-    parser.info("End of extension '%s' when finding '%s'" %
-           (parser["block_type"].value, parser.stream.readBytes(addr, 4)))
+    parser.info(
+        f"""End of extension '{parser["block_type"].value}' when finding '{parser.stream.readBytes(addr, 4)}'"""
+    )
 
 class ModplugBlock(FieldSet):
     BLOCK_INFO = {
@@ -269,9 +268,7 @@ class ModplugBlock(FieldSet):
             yield UInt32(self, "block_size")
 
         if self.parseBlock:
-            for field in self.parseBlock():
-                yield field
-
+            yield from self.parseBlock()
         if self.has_size:
             size = self["block_size"].value - (self.current_size//8)
             if size > 0:

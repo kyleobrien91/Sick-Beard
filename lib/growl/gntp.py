@@ -90,42 +90,40 @@ class _GNTPBase(object):
 		@param value: Value to decode
 		@return: Hex string
 		'''
-		result = ''
-		for i in range(0,len(value),2):
-			tmp = int(value[i:i+2],16)
-			result += chr(tmp)
-		return result
+		return ''.join(chr(int(value[i:i+2],16)) for i in range(0,len(value),2))
 	def _decode_binary(self,rawIdentifier,identifier):
 		rawIdentifier += '\r\n\r\n'
 		dataLength = int(identifier['Length'])
 		pointerStart = self.raw.find(rawIdentifier)+len(rawIdentifier)
 		pointerEnd = pointerStart + dataLength
 		data = self.raw[pointerStart:pointerEnd]
-		if not len(data) == dataLength:
-			raise ParseError('INVALID_DATA_LENGTH Expected: %s Recieved %s'%(dataLength,len(data)))
+		if len(data) != dataLength:
+			raise ParseError(
+				f'INVALID_DATA_LENGTH Expected: {dataLength} Recieved {len(data)}'
+			)
 		return data
 	def validate_password(self,password):
 		'''
 		Validate GNTP Message against stored password
 		'''
 		self.password = password
-		if password == None: raise Exception()
+		if password is None: raise Exception()
 		keyHash = self.info.get('keyHash',None)
-		if keyHash is None and self.password is None:
-			return True
 		if keyHash is None:
+			if self.password is None:
+				return True
 			raise AuthError('Invalid keyHash')
 		if self.password is None:
 			raise AuthError('Missing password')
-		
+
 		password = self.password.encode('utf8')
 		saltHash = self._decode_hex(self.info['salt'])
-		
+
 		keyBasis = password+saltHash
 		key = hashlib.md5(keyBasis).digest()
 		keyHash = hashlib.md5(key).hexdigest()
-		
-		if not keyHash.upper() == self.info['keyHash'].upper():
+
+		if keyHash.upper() != self.info['keyHash'].upper():
 			raise AuthError('Invalid Hash')
 		return True
 	def validate(self):
@@ -134,32 +132,22 @@ class _GNTPBase(object):
 		'''
 		for header in self.requiredHeaders:
 			if not self.headers.get(header,False):
-				raise ParseError('Missing Notification Header: '+header)
+				raise ParseError(f'Missing Notification Header: {header}')
 		
 	def format_info(self):
 		'''
 		Generate info line for GNTP Message
 		@return: Info line string
 		'''
-		info = u'GNTP/%s %s'%(
-			self.info.get('version'),
-			self.info.get('messagetype'),
-		)
+		info = f"GNTP/{self.info.get('version')} {self.info.get('messagetype')}"
 		if self.info.get('encryptionAlgorithmID',None):
-			info += ' %s:%s'%(
-				self.info.get('encryptionAlgorithmID'),
-				self.info.get('ivValue'),
-			)
+			info += f" {self.info.get('encryptionAlgorithmID')}:{self.info.get('ivValue')}"
 		else:
 			info+=' NONE'
-		
+
 		if self.info.get('keyHashAlgorithmID',None):
-			info += ' %s:%s.%s'%(
-				self.info.get('keyHashAlgorithmID'),
-				self.info.get('keyHash'),
-				self.info.get('salt')
-			)			
-		
+			info += f" {self.info.get('keyHashAlgorithmID')}:{self.info.get('keyHash')}.{self.info.get('salt')}"			
+
 		return info	
 	def parse_dict(self,data):
 		'''
@@ -238,11 +226,11 @@ class GNTPRegister(_GNTPBase):
 		'''
 		for header in self.requiredHeaders:
 			if not self.headers.get(header,False):
-				raise ParseError('Missing Registration Header: '+header)
+				raise ParseError(f'Missing Registration Header: {header}')
 		for notice in self.notifications:
 			for header in self.requiredNotification:
 				if not notice.get(header,False):
-					raise ParseError('Missing Notification Header: '+header)		
+					raise ParseError(f'Missing Notification Header: {header}')		
 	def decode(self,data,password):
 		'''
 		Decode existing GNTP Registration message
@@ -271,10 +259,7 @@ class GNTPRegister(_GNTPBase):
 		@param name: Notification Name
 		@param enabled: Default Notification to Enabled
 		'''
-		notice = {}
-		notice['Notification-Name'] = name
-		notice['Notification-Enabled'] = str(enabled)
-			
+		notice = {'Notification-Name': name, 'Notification-Enabled': str(enabled)}
 		self.notifications.append(notice)
 		self.headers['Notifications-Count'] = len(self.notifications)
 	def encode(self):

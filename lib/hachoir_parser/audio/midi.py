@@ -31,7 +31,7 @@ class Integer(Bits):
                 break
             addr += 8
             self._size += 8
-            if 32 < self._size:
+            if self._size > 32:
                 raise ParserError("Integer size is bigger than 32-bit")
         self.createValue = lambda: value
 
@@ -108,24 +108,21 @@ class Command(FieldSet):
         if command == 0xFF:
             yield Enum(textHandler(UInt8(self, "meta_command"), hexadecimal), self.META_COMMAND_DESC)
             yield UInt8(self, "data_len")
-            size = self["data_len"].value
-            if size:
+            if size := self["data_len"].value:
                 command = self["meta_command"].value
                 if command in self.META_COMMAND_PARSER:
                     parser = self.META_COMMAND_PARSER[command]
                 else:
                     parser = None
                 if parser:
-                    for field in parser(self, size):
-                        yield field
+                    yield from parser(self, size)
                 else:
                     yield RawBytes(self, "data", size)
         else:
             if command not in self.COMMAND_PARSER:
-                raise ParserError("Unknown command: %s" % self["command"].display)
+                raise ParserError(f'Unknown command: {self["command"].display}')
             parser = self.COMMAND_PARSER[command]
-            for field in parser(self):
-                yield field
+            yield from parser(self)
 
     def createDescription(self):
         if "meta_command" in self:
@@ -141,13 +138,8 @@ class Track(FieldSet):
     def createFields(self):
         yield String(self, "marker", 4, "Track marker (MTrk)", charset="ASCII")
         yield UInt32(self, "size")
-        if True:
-            while not self.eof:
-                yield Command(self, "command[]")
-        else:
-            size = self["size"].value
-            if size:
-                yield RawBytes(self, "raw", size)
+        while not self.eof:
+            yield Command(self, "command[]")
 
     def createDescription(self):
         command = self["command[0]"]
@@ -173,8 +165,7 @@ class Header(FieldSet):
         yield UInt16(self, "delta_time", "Delta-time ticks per quarter note")
 
     def createDescription(self):
-        return "%s; %s tracks" % (
-            self["file_format"].display, self["nb_track"].value)
+        return f'{self["file_format"].display}; {self["nb_track"].value} tracks'
 
 class MidiFile(Parser):
     MAGIC = "MThd"
@@ -192,9 +183,7 @@ class MidiFile(Parser):
     def validate(self):
         if self.stream.readBytes(0, 4) != self.MAGIC:
             return "Invalid signature"
-        if self["header/size"].value != 6:
-            return "Invalid header size"
-        return True
+        return "Invalid header size" if self["header/size"].value != 6 else True
 
     def createFields(self):
         yield String(self, "signature", 4, r"MIDI signature (MThd)", charset="ASCII")
@@ -203,14 +192,12 @@ class MidiFile(Parser):
             yield Track(self, "track[]")
 
     def createDescription(self):
-        return "MIDI audio: %s" % self["header"].description
+        return f'MIDI audio: {self["header"].description}'
 
     def createContentSize(self):
         count = self["/header/nb_track"].value - 1
         start = self["track[%u]" % count].absolute_address
         # Search "End of track" of last track
         end = self.stream.searchBytes("\xff\x2f\x00", start, MAX_FILESIZE*8)
-        if end is not None:
-            return end + 3*8
-        return None
+        return end + 3*8 if end is not None else None
 

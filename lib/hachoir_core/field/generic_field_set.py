@@ -92,8 +92,7 @@ class GenericFieldSet(BasicFieldSet):
         self._array_cache = {}
 
     def __str__(self):
-        return '<%s path=%s, current_size=%s, current length=%s>' % \
-            (self.__class__.__name__, self.path, self._current_size, len(self._fields))
+        return f'<{self.__class__.__name__} path={self.path}, current_size={self._current_size}, current length={len(self._fields)}>'
 
     def __len__(self):
         """
@@ -197,14 +196,14 @@ class GenericFieldSet(BasicFieldSet):
 
     def _fixFieldSize(self, field, new_size):
         if new_size > 0:
-            if field.is_field_set and 0 < field.size:
+            if field.is_field_set and field.size > 0:
                 field._truncate(new_size)
                 return
 
             # Don't add the field <=> delete item
             if self._size is None:
                 self._size = self._current_size + new_size
-        self.warning("[Autofix] Delete '%s' (too large)" % field.path)
+        self.warning(f"[Autofix] Delete '{field.path}' (too large)")
         raise StopIteration()
 
     def _getField(self, name, const):
@@ -273,12 +272,10 @@ class GenericFieldSet(BasicFieldSet):
         # If last field is too big, delete it
         while self._size < self._current_size:
             field = self._deleteField(len(self._fields)-1)
-            message.append("delete field %s" % field.path)
+            message.append(f"delete field {field.path}")
         assert self._current_size <= self._size
 
-        # If field size current is smaller: add a raw field
-        size = self._size - self._current_size
-        if size:
+        if size := self._size - self._current_size:
             field = createRawField(self, size, "raw[]")
             message.append("add padding")
             self._current_size += field.size
@@ -286,7 +283,7 @@ class GenericFieldSet(BasicFieldSet):
         else:
             field = None
         message = ", ".join(message)
-        self.warning("[Autofix] Fix parser error: " + message)
+        self.warning(f"[Autofix] Fix parser error: {message}")
         assert self._current_size == self._size
         return field
 
@@ -420,7 +417,7 @@ class GenericFieldSet(BasicFieldSet):
             nbits = address - (self.absolute_address + self._current_size)
         if nbits < 0:
             raise ParserError("Seek error, unable to go back!")
-        if 0 < nbits:
+        if nbits > 0:
             if null:
                 return createNullField(self, nbits, name, description)
             else:
@@ -441,7 +438,7 @@ class GenericFieldSet(BasicFieldSet):
         # TODO: Check in self and not self.field
         # Problem is that "generator is already executing"
         if name not in self._fields:
-            raise ParserError("Unable to replace %s: field doesn't exist!" % name)
+            raise ParserError(f"Unable to replace {name}: field doesn't exist!")
         assert 1 <= len(new_fields)
         old_field = self[name]
         total_size = sum( (field.size for field in new_fields) )
@@ -459,7 +456,7 @@ class GenericFieldSet(BasicFieldSet):
                 % (name, field.name))
         self._fields.replace(name, field.name, field)
         self.raiseEvent("field-replaced", old_field, field)
-        if 1 < len(new_fields):
+        if len(new_fields) > 1:
             index = self._fields.index(new_fields[0].name)+1
             address = field.address + field.size
             for field in new_fields[1:]:
@@ -495,15 +492,12 @@ class GenericFieldSet(BasicFieldSet):
         # Check size
         total_size = sum( field.size for field in new_fields )
         if old_field.size < total_size:
-            raise ParserError( \
-                "Unable to write fields at address %s " \
-                "(too big)!" % (address))
+            raise ParserError(f"Unable to write fields at address {address} (too big)!")
 
-        # Need padding before?
-        replace = []
         size = address - old_field.address
         assert 0 <= size
-        if 0 < size:
+        replace = []
+        if size > 0:
             padding = createPaddingField(self, size)
             padding._address = old_field.address
             replace.append(padding)
@@ -517,7 +511,7 @@ class GenericFieldSet(BasicFieldSet):
         # Need padding after?
         size = (old_field.address + old_field.size) - address
         assert 0 <= size
-        if 0 < size:
+        if size > 0:
             padding = createPaddingField(self, size)
             padding._address = address
             replace.append(padding)

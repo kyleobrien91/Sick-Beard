@@ -98,22 +98,22 @@ def process_multipart(entity):
         # is often necessary to enclose the boundary parameter values in quotes
         # on the Content-type line"
         ib = entity.content_type.params['boundary'].strip(u'"')
-    
+
     if not re.match(u"^[ -~]{0,200}[!-~]$", ib):
         raise ValueError(u'Invalid boundary in multipart form: %r' % (ib,))
-    
-    ib = (u'--' + ib).encode('ascii')
-    
+
+    ib = f'--{ib}'.encode('ascii')
+
     # Find the first marker
     while True:
         b = entity.readline()
         if not b:
             return
-        
+
         b = b.strip()
         if b == ib:
             break
-    
+
     # Read all parts
     while True:
         part = entity.part_class.from_fp(entity.fp, ib)
@@ -125,42 +125,24 @@ def process_multipart(entity):
 def process_multipart_form_data(entity):
     """Read all multipart/form-data parts into entity.parts or entity.params."""
     process_multipart(entity)
-    
+
     kept_parts = []
     for part in entity.parts:
         if part.name is None:
             kept_parts.append(part)
         else:
-            if part.filename is None:
-                # It's a regular field
-                entity.params[part.name] = part.fullvalue()
-            else:
-                # It's a file upload. Retain the whole part so consumer code
-                # has access to its .file and .filename attributes.
-                entity.params[part.name] = part
-    
+            entity.params[part.name] = part.fullvalue() if part.filename is None else part
     entity.parts = kept_parts
 
 def _old_process_multipart(entity):
     """The behavior of 3.2 and lower. Deprecated and will be changed in 3.3."""
     process_multipart(entity)
-    
+
     params = entity.params
-    
+
     for part in entity.parts:
-        if part.name is None:
-            key = u'parts'
-        else:
-            key = part.name
-        
-        if part.filename is None:
-            # It's a regular field
-            value = part.fullvalue()
-        else:
-            # It's a file upload. Retain the whole part so consumer code
-            # has access to its .file and .filename attributes.
-            value = part
-        
+        key = u'parts' if part.name is None else part.name
+        value = part.fullvalue() if part.filename is None else part
         if key in params:
             if not isinstance(params[key], list):
                 params[key] = [params[key]]
@@ -203,18 +185,18 @@ class Entity(object):
         # Make an instance-specific copy of the class processors
         # so Tools, etc. can replace them per-request.
         self.processors = self.processors.copy()
-        
+
         self.fp = fp
         self.headers = headers
-        
+
         if params is None:
             params = {}
         self.params = params
-        
+
         if parts is None:
             parts = []
         self.parts = parts
-        
+
         # Content-Type
         self.content_type = headers.elements(u'Content-Type')
         if self.content_type:
@@ -222,16 +204,14 @@ class Entity(object):
         else:
             self.content_type = httputil.HeaderElement.from_str(
                 self.default_content_type)
-        
-        # Copy the class 'attempt_charsets', prepending any Content-Type charset
-        dec = self.content_type.params.get(u"charset", None)
-        if dec:
+
+        if dec := self.content_type.params.get(u"charset", None):
             dec = dec.decode('ISO-8859-1')
             self.attempt_charsets = [dec] + [c for c in self.attempt_charsets
                                              if c != dec]
         else:
             self.attempt_charsets = self.attempt_charsets[:]
-        
+
         # Length
         self.length = None
         clen = headers.get(u'Content-Length', None)
@@ -241,12 +221,11 @@ class Entity(object):
                 self.length = int(clen)
             except ValueError:
                 pass
-        
+
         # Content-Disposition
         self.name = None
         self.filename = None
-        disp = headers.elements(u'Content-Disposition')
-        if disp:
+        if disp := headers.elements(u'Content-Disposition'):
             disp = disp[0]
             if 'name' in disp.params:
                 self.name = disp.params['name']
@@ -273,10 +252,10 @@ class Entity(object):
         return self
     
     def next(self):
-        line = self.readline()
-        if not line:
+        if line := self.readline():
+            return line
+        else:
             raise StopIteration
-        return line
     
     def read_into_file(self, fp_out=None):
         """Read the request body into fp_out (or make_file() if None). Return fp_out."""
@@ -342,25 +321,25 @@ class Part(Entity):
         self.file = None
         self.value = None
     
-    def from_fp(cls, fp, boundary):
-        headers = cls.read_headers(fp)
-        return cls(fp, headers, boundary)
+    def from_fp(self, fp, boundary):
+        headers = self.read_headers(fp)
+        return self(fp, headers, boundary)
     from_fp = classmethod(from_fp)
     
-    def read_headers(cls, fp):
+    def read_headers(self, fp):
         headers = httputil.HeaderMap()
         while True:
             line = fp.readline()
             if not line:
                 # No more data--illegal end of headers
                 raise EOFError(u"Illegal end of headers.")
-            
+
             if line == '\r\n':
                 # Normal end of headers
                 break
             if not line.endswith('\r\n'):
                 raise ValueError(u"MIME requires CRLF terminators: %r" % line)
-            
+
             if line[0] in ' \t':
                 # It's a continuation line.
                 v = line.strip().decode(u'ISO-8859-1')
@@ -368,12 +347,11 @@ class Part(Entity):
                 k, v = line.split(":", 1)
                 k = k.strip().decode(u'ISO-8859-1')
                 v = v.strip().decode(u'ISO-8859-1')
-            
-            existing = headers.get(k)
-            if existing:
+
+            if existing := headers.get(k):
                 v = u", ".join((existing, v))
             headers[k] = v
-        
+
         return headers
     read_headers = classmethod(read_headers)
     
@@ -387,11 +365,11 @@ class Part(Entity):
         supports the 'write' method; all bytes read will be written to the fp,
         and that fp is returned.
         """
-        endmarker = self.boundary + "--"
         delim = ""
         prev_lf = True
         lines = []
         seen = 0
+        endmarker = f"{self.boundary}--"
         while True:
             line = self.fp.readline(1 << 16)
             if not line:
@@ -403,9 +381,9 @@ class Part(Entity):
                 if strippedline == endmarker:
                     self.fp.finish()
                     break
-            
+
             line = delim + line
-            
+
             if line.endswith("\r\n"):
                 delim = "\r\n"
                 line = line[:-2]
@@ -417,7 +395,7 @@ class Part(Entity):
             else:
                 delim = ""
                 prev_lf = False
-            
+
             if fp_out is None:
                 lines.append(line)
                 seen += len(line)
@@ -427,7 +405,7 @@ class Part(Entity):
                         fp_out.write(line)
             else:
                 fp_out.write(line)
-        
+
         if fp_out is None:
             result = ''.join(lines)
             for charset in self.attempt_charsets:
@@ -440,8 +418,9 @@ class Part(Entity):
                     return result
             else:
                 raise cherrypy.HTTPError(
-                    400, "The request entity could not be decoded. The following "
-                    "charsets were attempted: %s" % repr(self.attempt_charsets))
+                    400,
+                    f"The request entity could not be decoded. The following charsets were attempted: {repr(self.attempt_charsets)}",
+                )
         else:
             fp_out.seek(0)
             return fp_out
@@ -595,8 +574,7 @@ class SizedReader:
             data = self.read(chunksize)
             if not data:
                 break
-            pos = data.find('\n') + 1
-            if pos:
+            if pos := data.find('\n') + 1:
                 chunks.append(data[:pos])
                 remainder = data[pos:]
                 self.buffer += remainder

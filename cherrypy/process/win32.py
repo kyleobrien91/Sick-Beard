@@ -53,14 +53,14 @@ class ConsoleCtrlHandler(plugins.SimplePlugin):
         if event in (win32con.CTRL_C_EVENT, win32con.CTRL_LOGOFF_EVENT,
                      win32con.CTRL_BREAK_EVENT, win32con.CTRL_SHUTDOWN_EVENT,
                      win32con.CTRL_CLOSE_EVENT):
-            self.bus.log('Console event %s: shutting down bus' % event)
-            
+            self.bus.log(f'Console event {event}: shutting down bus')
+
             # Remove self immediately so repeated Ctrl-C doesn't re-call it.
             try:
                 self.stop()
             except ValueError:
                 pass
-            
+
             self.bus.exit()
             # 'First to return True stops the calls'
             return 1
@@ -105,13 +105,11 @@ class Win32Bus(wspbus.Bus):
         if isinstance(state, (tuple, list)):
             # Don't wait for an event that beat us to the punch ;)
             if self.state not in state:
-                events = tuple([self._get_state_event(s) for s in state])
+                events = tuple(self._get_state_event(s) for s in state)
                 win32event.WaitForMultipleObjects(events, 0, win32event.INFINITE)
-        else:
-            # Don't wait for an event that beat us to the punch ;)
-            if self.state != state:
-                event = self._get_state_event(state)
-                win32event.WaitForSingleObject(event, win32event.INFINITE)
+        elif self.state != state:
+            event = self._get_state_event(state)
+            win32event.WaitForSingleObject(event, win32event.INFINITE)
 
 
 class _ControlCodes(dict):

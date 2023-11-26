@@ -60,8 +60,12 @@ class Bit(RawBits):
         RawBits.__init__(self, parent, name, 1, description=description)
 
     def createValue(self):
-        return 1 == self._parent.stream.readBits(
-                self.absolute_address, 1, self._parent.endian)
+        return (
+            self._parent.stream.readBits(
+                self.absolute_address, 1, self._parent.endian
+            )
+            == 1
+        )
 
     def createRawDisplay(self):
         return unicode(int(self.value))
